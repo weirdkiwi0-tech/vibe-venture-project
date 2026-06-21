@@ -98,7 +98,8 @@ az resource list --resource-group <resource-group-name>
 ## 환경 변수
 
 ### Frontend
-- `NEXT_PUBLIC_API_URL`: Backend API URL (배포 시 자동 설정)
+- `NEXT_PUBLIC_API_BASE_URL` (권장): Backend API URL
+- `NEXT_PUBLIC_API_URL`: 하위 호환용 Backend API URL
 
 ### Backend
 필요시 `.env` 파일에 추가:

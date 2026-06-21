@@ -14,7 +14,7 @@ KeepIt frontend workspace built with Next.js App Router.
 - `tests/e2e`: end-to-end tests
 
 ## Running
-- Set `NEXT_PUBLIC_API_BASE_URL` to the backend URL, or keep the default `http://localhost:3000`
+- Set `NEXT_PUBLIC_API_BASE_URL` (or `NEXT_PUBLIC_API_URL`) to the backend URL, or keep the default `http://localhost:3001`
 - Install dependencies in this folder, then run `npm run dev`
 
 ## Notes
