@@ -21,7 +21,16 @@ import type { UserRole } from './roles';
 const DEFAULT_API_BASE_URL = 'http://localhost:3001';
 
 function apiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_BASE_URL;
+  const publicApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (publicApiUrl) {
+    return publicApiUrl;
+  }
+
+  if (typeof window === 'undefined') {
+    return process.env.INTERNAL_API_BASE_URL ?? process.env.API_BASE_URL ?? 'http://backend:3000';
+  }
+
+  return DEFAULT_API_BASE_URL;
 }
 
 export function getApiBaseUrl() {

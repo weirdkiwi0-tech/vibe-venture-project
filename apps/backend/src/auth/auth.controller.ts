@@ -27,9 +27,49 @@ interface AuthenticatedRequest extends Request {
   user?: GoogleAuthUser;
 }
 
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') {
+    return true;
+  }
+
+  if (normalized === 'false') {
+    return false;
+  }
+
+  return undefined;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  private shouldUseSecureCookie(req: Request): boolean {
+    const explicit = parseBooleanEnv(process.env.COOKIE_SECURE);
+    if (typeof explicit === 'boolean') {
+      return explicit;
+    }
+
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const proto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto?.split(',')[0]?.trim();
+
+    return proto === 'https';
+  }
+
+  private cookieBaseOptions(req: Request) {
+    return {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30 * 1000,
+      sameSite: 'lax' as const,
+      secure: this.shouldUseSecureCookie(req),
+    };
+  }
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
@@ -61,12 +101,7 @@ export class AuthController {
 
     const sessionId = this.authService.createSession(user.id);
 
-    const cookieBaseOptions = {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30 * 1000,
-      sameSite: 'lax' as const,
-      secure: process.env.NODE_ENV === 'production',
-    };
+    const cookieBaseOptions = this.cookieBaseOptions(req);
 
     res.cookie('keepit-session', sessionId, {
       ...cookieBaseOptions,
@@ -120,7 +155,7 @@ export class AuthController {
   }
 
   @Post('signup')
-  async signup(@Body() body: LocalSignUpDto, @Res() res: Response) {
+  async signup(@Body() body: LocalSignUpDto, @Req() req: Request, @Res() res: Response) {
     try {
       const { user } = this.authService.signUpLocal({
         email: body.email,
@@ -130,12 +165,7 @@ export class AuthController {
       });
       const sessionId = this.authService.createSession(user.id);
 
-      const cookieBaseOptions = {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 30 * 1000,
-        sameSite: 'lax' as const,
-        secure: process.env.NODE_ENV === 'production',
-      };
+      const cookieBaseOptions = this.cookieBaseOptions(req);
 
       res.cookie('keepit-session', sessionId, {
         ...cookieBaseOptions,
@@ -166,17 +196,12 @@ export class AuthController {
   }
 
   @Post('signin')
-  async signin(@Body() body: LocalSignInDto, @Res() res: Response) {
+  async signin(@Body() body: LocalSignInDto, @Req() req: Request, @Res() res: Response) {
     try {
       const user = this.authService.signInLocal(body.email, body.password);
       const sessionId = this.authService.createSession(user.id);
 
-      const cookieBaseOptions = {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 30 * 1000,
-        sameSite: 'lax' as const,
-        secure: process.env.NODE_ENV === 'production',
-      };
+      const cookieBaseOptions = this.cookieBaseOptions(req);
 
       res.cookie('keepit-session', sessionId, {
         ...cookieBaseOptions,
