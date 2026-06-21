@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, type Request, type Response, type NextFunction } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -24,18 +24,57 @@ async function bootstrap() {
     }
   };
 
+  const isAllowedOrigin = (origin: string | undefined) => {
+    if (!origin) {
+      return true;
+    }
+
+    return staticAllowedOrigins.has(origin) || isLikelyContainerAppOrigin(origin);
+  };
+
   // Base64 첨부파일이 포함된 요청(질문/답변 등록) 수용을 위해 body parser 한도를 상향합니다.
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ limit: '10mb', extended: true }));
 
   app.use(cookieParser());
 
+  // Some ingress paths omit Access-Control-Allow-Credentials on OPTIONS responses.
+  // Ensure credentialed auth/signup requests always receive the required CORS headers.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    const allowed = typeof origin === 'string' && isAllowedOrigin(origin);
+
+    if (allowed && origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+
+    if (req.method === 'OPTIONS') {
+      if (!allowed) {
+        res.status(403).send('CORS blocked');
+        return;
+      }
+
+      const reqMethods = req.headers['access-control-request-method'];
+      const reqHeaders = req.headers['access-control-request-headers'];
+      res.header('Access-Control-Allow-Methods', typeof reqMethods === 'string' ? reqMethods : 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      if (typeof reqHeaders === 'string' && reqHeaders.length > 0) {
+        res.header('Access-Control-Allow-Headers', reqHeaders);
+      }
+      res.status(204).send();
+      return;
+    }
+
+    next();
+  });
+
   app.enableCors({
     origin: (
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      if (!origin || staticAllowedOrigins.has(origin) || isLikelyContainerAppOrigin(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
