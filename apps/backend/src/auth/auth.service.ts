@@ -449,4 +449,18 @@ export class AuthService {
       .prepare('UPDATE users SET banned_until = NULL WHERE id = ?')
       .run(userId);
   }
+
+  updateUserRole(userId: string, role: UserRole): void {
+    if (role !== 'user' && role !== 'admin') {
+      throw new BadRequestException('유효하지 않은 역할입니다.');
+    }
+
+    const result = this.db
+      .prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?')
+      .run(role, new Date().toISOString(), userId);
+
+    if (result.changes === 0) {
+      throw new BadRequestException('사용자를 찾을 수 없습니다.');
+    }
+  }
 }

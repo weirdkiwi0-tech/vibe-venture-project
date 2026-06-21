@@ -70,6 +70,10 @@ export class AdminService {
     this.authService.unbanUser(userId);
   }
 
+  updateUserRole(userId: string, role: 'user' | 'admin') {
+    this.authService.updateUserRole(userId, role);
+  }
+
   async getOverview(): Promise<AdminOverviewResult> {
     const [allReports, queue, auditLogs] = await Promise.all([
       this.reportsService.listAll(),

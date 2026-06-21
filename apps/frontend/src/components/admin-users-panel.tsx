@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { deleteAdminUser, banAdminUser, unbanAdminUser, type AdminUser } from '../lib/api';
+import { deleteAdminUser, banAdminUser, unbanAdminUser, updateAdminUserRole, type AdminUser } from '../lib/api';
 import type { UserRole } from '../lib/roles';
 
 const DEFAULT_PROFILE_IMAGE = '/default-profile.svg';
@@ -20,6 +20,7 @@ export function AdminUsersPanel({ initialUsers, currentRole }: { initialUsers: A
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'user' | 'admin'>('all');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [banForm, setBanForm] = useState<BanFormState>({
     userId: null,
     years: 0,
@@ -128,6 +129,24 @@ export function AdminUsersPanel({ initialUsers, currentRole }: { initialUsers: A
     }
   };
 
+  const handleUpdateRole = async (user: AdminUser, newRole: 'user' | 'admin') => {
+    if (user.role === newRole) return;
+
+    const roleName = newRole === 'admin' ? '관리자' : '일반 사용자';
+    if (!window.confirm(`「${user.displayName}」을(를) ${roleName}(으)로 변경하시겠습니까?`)) return;
+
+    setUpdatingRole(user.id);
+    setError('');
+    try {
+      await updateAdminUserRole(user.id, newRole, currentRole);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '역할 변경에 실패했습니다.');
+    } finally {
+      setUpdatingRole(null);
+    }
+  };
+
   return (
     <div className="stack-list">
       {/* 검색·필터 바 */}
@@ -186,9 +205,17 @@ export function AdminUsersPanel({ initialUsers, currentRole }: { initialUsers: A
                     </td>
                     <td className="admin-user-email">{user.email}</td>
                     <td>
-                      <span className={`community-badge ${user.role === 'admin' ? 'problem' : 'chat'}`}>
-                        {user.role === 'admin' ? '관리자' : '사용자'}
-                      </span>
+                      <div className="admin-user-role-selector">
+                        <button
+                          type="button"
+                          className={`community-badge ${user.role === 'admin' ? 'problem' : 'chat'}`}
+                          onClick={() => void handleUpdateRole(user, user.role === 'admin' ? 'user' : 'admin')}
+                          disabled={updatingRole === user.id}
+                          title="클릭하여 역할 변경"
+                        >
+                          {updatingRole === user.id ? '변경 중…' : user.role === 'admin' ? '관리자' : '사용자'}
+                        </button>
+                      </div>
                     </td>
                     <td className="admin-user-date">{new Date(user.createdAt).toLocaleDateString('ko-KR')}</td>
                     <td>

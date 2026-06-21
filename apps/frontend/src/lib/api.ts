@@ -464,6 +464,17 @@ export async function unbanAdminUser(userId: string, role: UserRole, cookieHeade
   });
 }
 
+export async function updateAdminUserRole(userId: string, newRole: 'user' | 'admin', role: UserRole, cookieHeader?: string) {
+  return fetchJson<{ success: boolean }>(`/admin/users/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role: newRole }),
+    headers: {
+      'x-user-role': role,
+      ...withCookieHeader(cookieHeader),
+    },
+  });
+}
+
 export async function getSlaBreaches(role: UserRole, cookieHeader?: string) {
   return fetchJson<
     Array<{

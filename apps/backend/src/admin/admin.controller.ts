@@ -35,4 +35,10 @@ export class AdminController {
     this.adminService.unbanUser(id);
     return { success: true };
   }
+
+  @Patch('users/:id/role')
+  updateUserRole(@Param('id') id: string, @Body() body: { role: 'user' | 'admin' }) {
+    this.adminService.updateUserRole(id, body.role);
+    return { success: true };
+  }
 }
