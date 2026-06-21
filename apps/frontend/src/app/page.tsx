@@ -8,7 +8,15 @@ import { getHomeFeed } from '../lib/api';
 
 export default async function HomePage() {
   const cookieHeader = (await headers()).get('cookie') ?? undefined;
-  const data = await getHomeFeed(cookieHeader);
+
+  let data: Awaited<ReturnType<typeof getHomeFeed>> | null = null;
+  let feedLoadError = false;
+
+  try {
+    data = await getHomeFeed(cookieHeader);
+  } catch {
+    feedLoadError = true;
+  }
 
   return (
     <SiteShell
@@ -35,29 +43,48 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <StatsStrip
-        items={[
-          { label: '영상 수', value: String(data.metadata.videoCount), hint: '홈 상단 섹션 기준' },
-          { label: '질문 수', value: String(data.metadata.questionCount), hint: '오늘의 TOP 피드' },
-          { label: '갱신 시각', value: new Date(data.metadata.generatedAt).toLocaleTimeString('ko-KR') },
-        ]}
-      />
+      {feedLoadError || !data ? (
+        <SectionCard eyebrow="일시 장애" title="피드를 불러오지 못했습니다">
+          <p>
+            현재 피드 API 연결이 불안정합니다. 잠시 후 다시 시도하거나,
+            아래 메뉴에서 개별 화면으로 이동해 주세요.
+          </p>
+          <div className="hero-actions">
+            <Link href="/questions" className="secondary-button">
+              질문 페이지로 이동
+            </Link>
+            <Link href="/videos" className="secondary-button">
+              영상 페이지로 이동
+            </Link>
+          </div>
+        </SectionCard>
+      ) : (
+        <>
+          <StatsStrip
+            items={[
+              { label: '영상 수', value: String(data.metadata.videoCount), hint: '홈 상단 섹션 기준' },
+              { label: '질문 수', value: String(data.metadata.questionCount), hint: '오늘의 TOP 피드' },
+              { label: '갱신 시각', value: new Date(data.metadata.generatedAt).toLocaleTimeString('ko-KR') },
+            ]}
+          />
 
-      <SectionCard eyebrow="영상 TOP" title="오늘의 top 영상">
-        <VideoGrid videos={data.feed.videos.slice(0, 3)} />
-      </SectionCard>
+          <SectionCard eyebrow="영상 TOP" title="오늘의 top 영상">
+            <VideoGrid videos={data.feed.videos.slice(0, 3)} />
+          </SectionCard>
 
-      <SectionCard
-        eyebrow="질문 TOP"
-        title="인기 7 + 도움필요 3"
-        action={
-          <Link href="/questions" className="secondary-button">
-            모든 질문 보기
-          </Link>
-        }
-      >
-        <QuestionList questions={data.feed.questions} autoSlide itemsPerSlide={2} />
-      </SectionCard>
+          <SectionCard
+            eyebrow="질문 TOP"
+            title="인기 7 + 도움필요 3"
+            action={
+              <Link href="/questions" className="secondary-button">
+                모든 질문 보기
+              </Link>
+            }
+          >
+            <QuestionList questions={data.feed.questions} autoSlide itemsPerSlide={2} />
+          </SectionCard>
+        </>
+      )}
     </SiteShell>
   );
 }
