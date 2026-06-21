@@ -246,6 +246,21 @@ export class AuthService {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
+    const resolvedRole = this.resolveRoleByEmail(emailLower);
+    if (row.role !== resolvedRole) {
+      const nowIso = new Date().toISOString();
+      this.db
+        .prepare(
+          `UPDATE users
+           SET role = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(resolvedRole, nowIso, row.id);
+
+      row.role = resolvedRole;
+      row.updated_at = nowIso;
+    }
+
     const banInfo = this.getBanInfo(this.toAuthUser(row));
     if (banInfo.isBanned && banInfo.bannedUntil) {
       throw new UnauthorizedException(`이 계정은 밴 상태입니다. 해제 예정 시각: ${new Date(banInfo.bannedUntil).toLocaleString('ko-KR')}`);
