@@ -43,7 +43,12 @@ function apiBaseUrl() {
   }
 
   if (typeof window === 'undefined') {
-    return process.env.INTERNAL_API_BASE_URL ?? process.env.API_BASE_URL ?? 'http://backend:3000';
+    return (
+      process.env.INTERNAL_API_BASE_URL ??
+      process.env.API_BASE_URL ??
+      process.env.BACKEND_BASE_URL ??
+      'http://backend:3000'
+    );
   }
 
   const inferredAzureBackendUrl = inferAzureBackendUrlFromFrontendHost(window.location.hostname);

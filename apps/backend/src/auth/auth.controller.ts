@@ -27,6 +27,33 @@ interface AuthenticatedRequest extends Request {
   user?: GoogleAuthUser;
 }
 
+function inferFrontendBaseUrlFromBackendHost(req: Request): string | null {
+  const explicitOrigin = req.headers.origin;
+  if (typeof explicitOrigin === 'string' && explicitOrigin.length > 0) {
+    return explicitOrigin;
+  }
+
+  const forwardedProtoRaw = req.headers['x-forwarded-proto'];
+  const forwardedHostRaw = req.headers['x-forwarded-host'];
+  const hostRaw = forwardedHostRaw ?? req.headers.host;
+
+  const forwardedProto = Array.isArray(forwardedProtoRaw)
+    ? forwardedProtoRaw[0]
+    : forwardedProtoRaw?.split(',')[0]?.trim();
+  const host = Array.isArray(hostRaw) ? hostRaw[0] : hostRaw?.split(',')[0]?.trim();
+
+  if (!host) {
+    return null;
+  }
+
+  const proto = forwardedProto ?? 'https';
+  const frontendHost = host
+    .replace(/^backend\./, 'frontend.')
+    .replace(/^backend-/, 'frontend-');
+
+  return `${proto}://${frontendHost}`;
+}
+
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
   if (!value) {
     return undefined;
@@ -82,7 +109,7 @@ export class AuthController {
   async googleCallback(@Req() req: AuthenticatedRequest, @Res() res: Response) {
     const oauthUser = req.user;
     if (!oauthUser) {
-      return res.redirect(this.buildFrontendCallbackUrl(false, '구글 로그인에 실패했습니다.'));
+      return res.redirect(this.buildFrontendCallbackUrl(req, false, '구글 로그인에 실패했습니다.'));
     }
 
     let user: {
@@ -96,7 +123,7 @@ export class AuthController {
       isNewUser = signInResult.isNewUser;
     } catch (error) {
       const message = error instanceof Error ? error.message : '로그인 처리에 실패했습니다.';
-      return res.redirect(this.buildFrontendCallbackUrl(false, message));
+      return res.redirect(this.buildFrontendCallbackUrl(req, false, message));
     }
 
     const sessionId = this.authService.createSession(user.id);
@@ -113,7 +140,7 @@ export class AuthController {
       httpOnly: false,
     });
 
-    return res.redirect(this.buildFrontendCallbackUrl(isNewUser, undefined));
+    return res.redirect(this.buildFrontendCallbackUrl(req, isNewUser, undefined));
   }
 
   @Get('me')
@@ -151,7 +178,7 @@ export class AuthController {
     res.clearCookie('keepit-session', { path: '/' });
     res.clearCookie(ROLE_COOKIE_NAME, { path: '/' });
 
-    return res.redirect(this.buildFrontendCallbackUrl(false, '로그아웃 되었습니다.'));
+    return res.redirect(this.buildFrontendCallbackUrl(req, false, '로그아웃 되었습니다.'));
   }
 
   @Post('signup')
@@ -231,8 +258,9 @@ export class AuthController {
     }
   }
 
-  private buildFrontendCallbackUrl(isNewUser: boolean, message?: string): string {
-    const frontendBaseUrl = process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+  private buildFrontendCallbackUrl(req: Request, isNewUser: boolean, message?: string): string {
+    const frontendBaseUrl =
+      process.env.FRONTEND_BASE_URL ?? inferFrontendBaseUrlFromBackendHost(req) ?? 'http://localhost:3000';
     const callbackUrl = new URL('/auth/callback', frontendBaseUrl);
     callbackUrl.searchParams.set('newUser', String(isNewUser));
     if (message) {
