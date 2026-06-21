@@ -20,6 +20,22 @@ import type { UserRole } from './roles';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3001';
 
+function inferAzureBackendUrlFromFrontendHost(hostname: string): string | null {
+  if (!(hostname.endsWith('.azurecontainerapps.io') || hostname.endsWith('.azurecontainer.io'))) {
+    return null;
+  }
+
+  if (hostname.startsWith('frontend.')) {
+    return `https://backend.${hostname.slice('frontend.'.length)}`;
+  }
+
+  if (hostname.startsWith('frontend-')) {
+    return `https://backend-${hostname.slice('frontend-'.length)}`;
+  }
+
+  return null;
+}
+
 function apiBaseUrl() {
   const publicApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
   if (publicApiUrl) {
@@ -28,6 +44,11 @@ function apiBaseUrl() {
 
   if (typeof window === 'undefined') {
     return process.env.INTERNAL_API_BASE_URL ?? process.env.API_BASE_URL ?? 'http://backend:3000';
+  }
+
+  const inferredAzureBackendUrl = inferAzureBackendUrlFromFrontendHost(window.location.hostname);
+  if (inferredAzureBackendUrl) {
+    return inferredAzureBackendUrl;
   }
 
   return DEFAULT_API_BASE_URL;
