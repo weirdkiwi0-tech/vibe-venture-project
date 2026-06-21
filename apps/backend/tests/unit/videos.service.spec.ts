@@ -58,6 +58,24 @@ describe('VideosService (unit)', () => {
     expect(list).toHaveLength(10);
   });
 
+  it('returns all videos when count is below 50 even if more than 3', async () => {
+    for (let i = 0; i < 4; i += 1) {
+      await repo.save(
+        VideoEntity.create({
+          id: `small-${i}`,
+          uploaderId: 'u-1',
+          title: `small-video-${i}`,
+          url: `https://stream.test/small-${i}`,
+          durationSeconds: 90,
+          createdAt: new Date(1701000000000 + i * 1000),
+        }),
+      );
+    }
+
+    const list = await service.listHomeTopVideos();
+    expect(list).toHaveLength(4);
+  });
+
   it('blocks guest playback at 50 percent', async () => {
     const video = await service.create({
       title: 'guest gate',

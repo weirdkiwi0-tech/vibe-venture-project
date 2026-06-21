@@ -30,12 +30,6 @@ export class SqliteQuestionLikeRepository implements QuestionLikeRepository {
         VALUES (?, ?, ?, ?)
       `);
       stmt.run(id, questionId, userId, createdAt);
-
-      // Update likeCount in questions table
-      const updateStmt = this.getDb().prepare(
-        'UPDATE questions SET likeCount = likeCount + 1 WHERE id = ?',
-      );
-      updateStmt.run(questionId);
     } catch (error) {
       // Handle duplicate key error silently (user already liked)
     }
@@ -45,15 +39,7 @@ export class SqliteQuestionLikeRepository implements QuestionLikeRepository {
     const stmt = this.getDb().prepare(
       'DELETE FROM question_likes WHERE questionId = ? AND userId = ?',
     );
-    const result = stmt.run(questionId, userId);
-
-    if (result.changes > 0) {
-      // Update likeCount in questions table
-      const updateStmt = this.getDb().prepare(
-        'UPDATE questions SET likeCount = likeCount - 1 WHERE id = ?',
-      );
-      updateStmt.run(questionId);
-    }
+    stmt.run(questionId, userId);
   }
 
   async countLikes(questionId: string): Promise<number> {
