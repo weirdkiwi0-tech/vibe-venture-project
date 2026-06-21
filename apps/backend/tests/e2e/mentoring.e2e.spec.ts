@@ -1,6 +1,9 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
+import { randomUUID } from 'node:crypto';
+import { existsSync, unlinkSync } from 'node:fs';
+import { resolve } from 'node:path';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
@@ -8,6 +11,8 @@ import { AuthService } from '../../src/auth';
 describe('Mentoring API (e2e)', () => {
   let app: INestApplication;
   let authService: AuthService;
+  let testDbPath = '';
+  const originalDbPath = process.env.DB_PATH;
 
   function createAdminSession() {
     process.env.GOOGLE_ADMIN_EMAILS = 'mentoring-admin@example.com';
@@ -21,6 +26,9 @@ describe('Mentoring API (e2e)', () => {
   }
 
   beforeAll(async () => {
+    testDbPath = resolve(process.cwd(), `data/test-mentoring-e2e-${randomUUID()}.sqlite`);
+    process.env.DB_PATH = testDbPath;
+
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -41,6 +49,11 @@ describe('Mentoring API (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+
+    process.env.DB_PATH = originalDbPath;
+    if (existsSync(testDbPath)) {
+      unlinkSync(testDbPath);
+    }
   });
 
   it('creates session, sends messages, and fetches details', async () => {

@@ -7,7 +7,7 @@ export class DatabaseService implements OnApplicationBootstrap {
   private db!: Database.Database;
 
   onApplicationBootstrap() {
-    const dbPath = path.join(__dirname, '../../data/keepit.sqlite');
+    const dbPath = process.env.DB_PATH ?? path.join(__dirname, '../../data/keepit.sqlite');
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.initializeDatabase();
