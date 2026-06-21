@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: keepit
+metadata:
+    template: azd-init@1.25.6
+services:
+    backend:
+        project: apps/backend
+        host: containerapp
+        language: js
+        docker:
+            path: Dockerfile
+            remoteBuild: true
+    frontend:
+        project: apps/frontend
+        host: containerapp
+        language: ts
+        docker:
+            path: Dockerfile
+            remoteBuild: true
+resources:
+    backend:
+        type: host.containerapp
+        port: 3000
+    frontend:
+        type: host.containerapp
+        uses:
+            - backend
+        port: 3000

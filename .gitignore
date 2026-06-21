@@ -1,0 +1,14 @@
+.azure
+**/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/*.tsbuildinfo
+apps/backend/data/
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.db
+*.log
+.DS_Store
+tmp/

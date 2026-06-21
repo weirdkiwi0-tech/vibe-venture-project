@@ -1,0 +1,53 @@
+import { cookies } from 'next/headers';
+import { SiteShell } from '../../components/site-shell';
+import { SectionCard } from '../../components/section-card';
+import { AdminDashboard } from '../../components/admin-dashboard';
+import { parseUserRole, ROLE_COOKIE_NAME } from '../../lib/roles';
+import { getAdminOverview, getAdminUsers, getSlaBreaches } from '../../lib/api';
+
+export default async function AdminPage() {
+  const cookieStore = await cookies();
+  const currentRole = parseUserRole(cookieStore.get(ROLE_COOKIE_NAME)?.value);
+
+  if (currentRole !== 'admin') {
+    return (
+      <SiteShell title="운영자 대시보드" description="관리자 역할이 있어야 접근할 수 있습니다.">
+        <SectionCard eyebrow="접근 제한" title="관리자 역할이 필요합니다">
+          <div className="empty-state">관리자 권한이 부여된 계정으로 로그인해야 운영자 화면을 볼 수 있습니다.</div>
+        </SectionCard>
+      </SiteShell>
+    );
+  }
+
+  // 서버 컴포넌트 → 백엔드 API 호출 시 세션 쿠키를 직접 포워딩
+  const sessionValue = cookieStore.get('keepit-session')?.value;
+  const cookieHeader = sessionValue ? `keepit-session=${sessionValue}` : '';
+
+  let overview;
+  let breaches;
+  let users;
+
+  try {
+    [overview, breaches, users] = await Promise.all([
+      getAdminOverview(currentRole, cookieHeader),
+      getSlaBreaches(currentRole, cookieHeader),
+      getAdminUsers(currentRole, cookieHeader),
+    ]);
+  } catch {
+    return (
+      <SiteShell title="운영자 대시보드" description="신고, 계정, SLA를 탭으로 관리합니다.">
+        <SectionCard eyebrow="세션 만료" title="다시 로그인해 주세요">
+          <div className="empty-state">
+            관리자 세션이 만료되었거나 권한이 변경되었습니다. 설정 화면에서 다시 로그인한 뒤 접근해 주세요.
+          </div>
+        </SectionCard>
+      </SiteShell>
+    );
+  }
+
+  return (
+    <SiteShell title="운영자 대시보드" description="신고, 계정, SLA를 탭으로 관리합니다.">
+      <AdminDashboard overview={overview} users={users} breaches={breaches} currentRole={currentRole} />
+    </SiteShell>
+  );
+}
