@@ -165,6 +165,7 @@ export class DatabaseService implements OnApplicationBootstrap {
         studentId TEXT NOT NULL,
         mentorId TEXT NOT NULL,
         channelId TEXT NOT NULL,
+        question TEXT NOT NULL DEFAULT '',
         startedAt TEXT NOT NULL,
         slaDeadline TEXT NOT NULL,
         firstResponseAt TEXT,
