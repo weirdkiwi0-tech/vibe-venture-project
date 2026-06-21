@@ -16,7 +16,7 @@ describe('CommunityService (unit)', () => {
     },
   }) as unknown as AuthService;
 
-  it('does not increase post viewCount for guests and non-registered users', async () => {
+  it('increases post viewCount for guests and non-registered users', async () => {
     const service = new CommunityService(createAuthServiceMock());
     const created = await service.createPost(
       {
@@ -29,8 +29,8 @@ describe('CommunityService (unit)', () => {
     const guestView = await service.getPostDetail(created.id);
     const unknownUserView = await service.getPostDetail(created.id, 'unknown-user');
 
-    expect(guestView.viewCount).toBe(0);
-    expect(unknownUserView.viewCount).toBe(0);
+    expect(guestView.viewCount).toBe(1);
+    expect(unknownUserView.viewCount).toBe(2);
   });
 
   it('increases post viewCount for registered users', async () => {

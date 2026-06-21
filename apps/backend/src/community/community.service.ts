@@ -318,11 +318,7 @@ export class CommunityService {
   }
 
   private shouldIncreaseViewCount(currentUserId?: string): boolean {
-    if (!currentUserId || currentUserId === 'anonymous-user') {
-      return false;
-    }
-
-    return Boolean(this.authService.getUserById(currentUserId));
+    return true;
   }
 
   private requirePost(postId: string): CommunityPost {

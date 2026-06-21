@@ -180,15 +180,7 @@ export class QuestionsService {
   }
 
   private shouldIncreaseViewCount(viewerId?: string): boolean {
-    if (!viewerId || viewerId === 'anonymous-user') {
-      return false;
-    }
-
-    if (!this.authService) {
-      return true;
-    }
-
-    return Boolean(this.authService.getUserById(viewerId));
+    return true;
   }
 
   private applyFilters(

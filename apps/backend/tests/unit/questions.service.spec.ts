@@ -162,7 +162,7 @@ describe('QuestionsService (unit)', () => {
     expect(filtered[0].question.grade).toBe('1');
   });
 
-  it('does not increase viewCount when viewer is not authenticated', async () => {
+  it('increases viewCount when viewer is not authenticated', async () => {
     const authServiceMock = {
       getUserById: (_id: string) => undefined,
     } as unknown as AuthService;
@@ -178,8 +178,8 @@ describe('QuestionsService (unit)', () => {
     const before = await localService.findById(created.id, 'unknown-user');
     const after = await localService.findById(created.id);
 
-    expect(before.question.viewCount).toBe(0);
-    expect(after.question.viewCount).toBe(0);
+    expect(before.question.viewCount).toBe(1);
+    expect(after.question.viewCount).toBe(2);
   });
 
   it('increases viewCount when viewer is a registered user', async () => {

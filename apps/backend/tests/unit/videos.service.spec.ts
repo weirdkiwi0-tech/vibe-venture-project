@@ -97,7 +97,7 @@ describe('VideosService (unit)', () => {
     );
   });
 
-  it('does not increase viewCount when viewer is not authenticated', async () => {
+  it('increases viewCount when viewer is not authenticated', async () => {
     const created = await service.create({
       title: 'view guard',
       url: 'https://stream.test/view-guard',
@@ -105,7 +105,7 @@ describe('VideosService (unit)', () => {
     });
 
     const viewed = await service.incrementView(created.id);
-    expect(viewed.viewCount).toBe(0);
+    expect(viewed.viewCount).toBe(1);
   });
 
   it('increases viewCount when viewer is a registered user', async () => {
