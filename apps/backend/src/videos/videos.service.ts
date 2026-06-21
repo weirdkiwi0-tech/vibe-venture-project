@@ -67,7 +67,8 @@ export class VideosService {
     };
 
     const source = todayVideos.length > 0 ? todayVideos : videos;
-    return [...source].sort(sortByTopScore).slice(0, 3);
+    const sorted = [...source].sort(sortByTopScore);
+    return source.length >= 50 ? sorted.slice(0, 10) : sorted;
   }
 
   async listAllVideos(search = '', subject = '', sort: 'latest' | 'popular' = 'latest') {
