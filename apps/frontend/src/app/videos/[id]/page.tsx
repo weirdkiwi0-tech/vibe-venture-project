@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../../components/section-card';
+import { CommunityProfileModal } from '../../../components/community-profile-modal';
 import { SiteShell } from '../../../components/site-shell';
 import { useAuthUser } from '../../../components/role-provider';
 import { createReportLink } from '../../../lib/report-links';
@@ -306,8 +307,16 @@ export default function VideoDetailPage() {
           {comments.length === 0 ? <div className="empty-state">첫 댓글을 남겨보세요.</div> : null}
           {comments.map((comment) => (
             <article key={comment.id} className="surface-card" style={{ padding: '0.8rem' }}>
-              <div className="card-meta">
-                {comment.authorId} · {new Date(comment.createdAt).toLocaleString('ko-KR')}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <CommunityProfileModal
+                  userId={comment.authorId}
+                  viewerId={authUser?.id}
+                  displayName={comment.authorName}
+                  avatar={comment.authorAvatar}
+                  photoUrl={comment.authorPhotoUrl}
+                  compact
+                />
+                <span className="card-meta" style={{ whiteSpace: 'nowrap', marginTop: '0.25rem' }}>{new Date(comment.createdAt).toLocaleString('ko-KR')}</span>
               </div>
               <p style={{ margin: '0.4rem 0 0' }}>{comment.content}</p>
               <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>

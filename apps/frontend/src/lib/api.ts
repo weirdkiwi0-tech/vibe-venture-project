@@ -3,6 +3,7 @@ import type {
   AdminOverviewResponse,
   CommunityBoardResponse,
   CommunityPostCommentItem,
+  CommunityMailboxResponse,
   CommunityPostDetail,
   CommunityProfileDetailResponse,
   MyAnswerItem,
@@ -541,6 +542,12 @@ export async function getCommunityProfile(profileId: string, currentUserId: stri
   );
 }
 
+export async function getCommunityMailbox(userId: string) {
+  return fetchJson<CommunityMailboxResponse>('/community/mailbox', {
+    headers: { 'x-user-id': userId },
+  });
+}
+
 export async function getCommunityPost(postId: string, currentUserId: string) {
   return fetchJson<CommunityPostDetail>(`/community/posts/${encodeURIComponent(postId)}`, {
     headers: { 'x-user-id': currentUserId },
@@ -596,12 +603,13 @@ export async function createCommunityPostComment(input: {
   postId: string;
   content: string;
   parentCommentId?: string;
+  authorVisibility?: 'nickname' | 'anonymous';
   userId?: string;
 }) {
   return fetchJson<CommunityPostCommentItem>(`/community/posts/${encodeURIComponent(input.postId)}/comments`, {
     method: 'POST',
     headers: jsonHeaders(withUserIdHeader(input.userId)),
-    body: JSON.stringify({ content: input.content, parentCommentId: input.parentCommentId }),
+    body: JSON.stringify({ content: input.content, parentCommentId: input.parentCommentId, authorVisibility: input.authorVisibility }),
   });
 }
 
@@ -650,6 +658,16 @@ export async function requestFriend(input: { targetId: string; userId: string })
 
 export async function acceptFriendRequest(input: { requestId: string; userId: string }) {
   return fetchJson(`/community/friend-requests/${encodeURIComponent(input.requestId)}/accept`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-id': input.userId,
+    },
+  });
+}
+
+export async function rejectFriendRequest(input: { requestId: string; userId: string }) {
+  return fetchJson(`/community/friend-requests/${encodeURIComponent(input.requestId)}/reject`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

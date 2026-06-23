@@ -5,10 +5,13 @@ import type {
   CommunityBoardResponse,
   CommunityDirectMessage,
   CommunityFriendItem,
+  CommunityMailboxNotification,
+  CommunityMailboxResponse,
   CommunityPost,
   CommunityPostComment,
   CommunityPostDetail,
   CommunityPostSummary,
+  CommunityProfileDetail,
   CommunityProfile,
 } from './community.types';
 
@@ -18,7 +21,7 @@ interface FriendRequestRecord {
   id: string;
   requesterId: string;
   targetId: string;
-  status: 'pending' | 'accepted';
+  status: 'pending' | 'accepted' | 'rejected';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,7 +30,7 @@ interface FriendRequestResponse {
   id: string;
   requesterId: string;
   targetId: string;
-  status: 'pending' | 'accepted';
+  status: 'pending' | 'accepted' | 'rejected';
   createdAt: string;
   updatedAt: string;
 }
@@ -37,6 +40,9 @@ interface CommunityPostCommentRecord {
   postId: string;
   authorId: string;
   authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
+  authorVisibility: 'nickname' | 'anonymous';
   content: string;
   parentCommentId: string | null;
   createdAt: string;
@@ -144,9 +150,115 @@ export class CommunityService {
     return this.buildCommentTree(this.postComments.get(postId) ?? [], currentUserId ?? 'anonymous-user');
   }
 
+  async getProfile(profileId: string, currentUserId?: string): Promise<CommunityProfileDetail> {
+    const profile = this.requireProfile(profileId);
+    const viewerId = currentUserId ?? 'anonymous-user';
+    const requests = this.friendRequests.filter(
+      (request) =>
+        request.status === 'pending' &&
+        (request.requesterId === profileId || request.targetId === profileId || request.requesterId === viewerId || request.targetId === viewerId),
+    );
+
+    const incoming = requests.find((request) => request.targetId === profileId && request.status === 'pending' && request.requesterId === viewerId);
+    const outgoing = requests.find((request) => request.requesterId === profileId && request.status === 'pending' && request.targetId === viewerId);
+
+    const recentPosts = this.posts
+      .filter((post) => post.authorId === profileId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5)
+      .map((post) => ({
+        id: post.id,
+        authorId: post.authorId,
+        type: post.attachments.length > 0 ? 'problem' as const : 'chat' as const,
+        content: post.content,
+        attachments: post.attachments,
+        createdAt: post.createdAt.toISOString(),
+        isMine: post.authorId === viewerId,
+      }));
+
+    const messages = this.directMessages
+      .filter((message) =>
+        (message.senderId === profileId && message.recipientId === viewerId) ||
+        (message.senderId === viewerId && message.recipientId === profileId),
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(-20)
+      .map((message) => ({
+        id: message.id,
+        senderId: message.senderId,
+        recipientId: message.recipientId,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
+      }));
+
+    return {
+      profile: {
+        id: profile.id,
+        name: profile.name,
+        role: profile.role,
+        school: this.resolveSchool(profileId),
+        grade: this.resolveGrade(profileId),
+        bio: this.resolveBio(profileId),
+        avatar: profile.avatar,
+        photoUrl: profile.photoUrl,
+        subjects: this.resolveSubjects(profileId),
+        relationship: profileId === viewerId ? 'self' : this.areFriends(profileId, viewerId) ? 'friend' : outgoing ? 'pending-outgoing' : incoming ? 'pending-incoming' : 'none',
+        friendCount: this.friendRequests.filter((request) => request.status === 'accepted' && (request.requesterId === profileId || request.targetId === profileId)).length,
+        lastMessagePreview: messages.length > 0 ? messages[messages.length - 1].content : '',
+      },
+      recentPosts,
+      messages,
+      canChat: this.areFriends(profileId, viewerId),
+      pendingFriendRequestId: outgoing?.id ?? null,
+      incomingFriendRequestId: incoming?.id ?? null,
+    };
+  }
+
+  async getMailbox(currentUserId: string): Promise<CommunityMailboxResponse> {
+    this.requireProfile(currentUserId);
+
+    const friendRequests = this.friendRequests
+      .filter((request) => request.requesterId === currentUserId || request.targetId === currentUserId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map((request) => {
+        const requester = this.requireProfile(request.requesterId);
+        const target = this.requireProfile(request.targetId);
+        return {
+          id: request.id,
+          requesterId: request.requesterId,
+          targetId: request.targetId,
+          requesterName: requester.name,
+          requesterAvatar: requester.avatar,
+          requesterPhotoUrl: requester.photoUrl,
+          targetName: target.name,
+          targetAvatar: target.avatar,
+          targetPhotoUrl: target.photoUrl,
+          status: request.status,
+          createdAt: request.createdAt.toISOString(),
+          updatedAt: request.updatedAt.toISOString(),
+        };
+      });
+
+    const notifications: CommunityMailboxNotification[] = friendRequests.map((request) => ({
+      id: `friend-request-${request.id}`,
+      type: 'friend-request',
+      title: request.status === 'pending' ? '새 친구 요청' : request.status === 'accepted' ? '친구 요청 수락됨' : '친구 요청 처리됨',
+      message: request.status === 'pending' ? `${request.requesterName} 님이 친구 요청을 보냈습니다.` : `${request.requesterName} 님의 친구 요청이 ${request.status === 'accepted' ? '수락' : '거절'}되었습니다.`,
+      actorId: request.requesterId,
+      actorName: request.requesterName,
+      actorAvatar: request.requesterAvatar,
+      actorPhotoUrl: request.requesterPhotoUrl,
+      relatedRequestId: request.id,
+      readAt: null,
+      createdAt: request.updatedAt,
+    }));
+
+    return { notifications, friendRequests };
+  }
+
   async createPostComment(
     postId: string,
-    input: { content: string; parentCommentId?: string | null },
+    input: { content: string; parentCommentId?: string | null; authorVisibility?: 'nickname' | 'anonymous' },
     authorId: string,
   ): Promise<CommunityPostComment> {
     const post = this.requirePost(postId);
@@ -167,7 +279,10 @@ export class CommunityService {
       id: randomUUID(),
       postId: post.id,
       authorId,
-      authorName: profile?.name ?? '알 수 없음',
+      authorName: input.authorVisibility === 'anonymous' ? '익명' : profile?.name ?? '알 수 없음',
+      authorAvatar: profile?.avatar ?? 'U',
+      authorPhotoUrl: profile?.photoUrl,
+      authorVisibility: input.authorVisibility ?? 'nickname',
       content,
       parentCommentId: input.parentCommentId ?? null,
       createdAt: new Date().toISOString(),
@@ -324,6 +439,21 @@ export class CommunityService {
     return this.mapFriendRequest(request);
   }
 
+  async rejectFriendRequest(requestId: string, currentUserId = 'student-jun') {
+    const request = this.friendRequests.find((item) => item.id === requestId);
+    if (!request) {
+      throw new NotFoundException('friend request not found');
+    }
+
+    if (request.targetId !== currentUserId) {
+      throw new BadRequestException('only the target can reject');
+    }
+
+    request.status = 'rejected';
+    request.updatedAt = new Date();
+    return this.mapFriendRequest(request);
+  }
+
   async sendDirectMessage(
     input: { recipientId: string; content: string },
     senderId = 'student-jun',
@@ -391,6 +521,9 @@ export class CommunityService {
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
       authorName: profile?.name ?? '알 수 없음',
+      authorAvatar: profile?.avatar ?? 'U',
+      authorPhotoUrl: profile?.photoUrl,
+      authorVisibility: 'nickname',
     };
   }
 
@@ -406,6 +539,9 @@ export class CommunityService {
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
       authorName: profile?.name ?? '알 수 없음',
+      authorAvatar: profile?.avatar ?? 'U',
+      authorPhotoUrl: profile?.photoUrl,
+      authorVisibility: 'nickname',
       isMine: post.authorId === currentUserId,
     };
   }
@@ -448,6 +584,7 @@ export class CommunityService {
       name: displayName,
       role: user.role === 'admin' ? 'mentor' : 'student',
       avatar: avatarSource.slice(0, 1).toUpperCase(),
+      photoUrl: user.photoUrl ?? undefined,
     };
 
     this.profiles.set(profile.id, profile);
@@ -493,6 +630,9 @@ export class CommunityService {
       postId: record.postId,
       authorId: record.authorId,
       authorName: record.authorName,
+      authorAvatar: record.authorAvatar,
+      authorPhotoUrl: record.authorPhotoUrl,
+      authorVisibility: record.authorVisibility,
       content: record.content,
       parentCommentId: record.parentCommentId,
       createdAt: record.createdAt,
@@ -500,6 +640,22 @@ export class CommunityService {
       isMine: record.authorId === viewerId,
       replies,
     };
+  }
+
+  private resolveSchool(profileId: string) {
+    return `${profileId.slice(0, 2).toUpperCase()} 학교`;
+  }
+
+  private resolveGrade(profileId: string) {
+    return String((profileId.length % 3) + 1);
+  }
+
+  private resolveBio(profileId: string) {
+    return `${profileId} 님의 프로필입니다.`;
+  }
+
+  private resolveSubjects(profileId: string) {
+    return profileId.startsWith('mentor') ? ['수학', '과학'] : ['수학', '영어'];
   }
 
   private requireProfile(id: string): CommunityProfile {

@@ -11,7 +11,9 @@ import {
   updateCommunityPostComment,
 } from '../lib/api';
 import { createReportLink } from '../lib/report-links';
+import { useCommunityPreferences } from '../lib/community-preferences';
 import { useAuthUser } from './role-provider';
+import { CommunityProfileModal } from './community-profile-modal';
 import type { CommunityPostCommentItem, CommunityPostDetail } from '../lib/types';
 
 interface CommunityPostWindowProps {
@@ -21,6 +23,7 @@ interface CommunityPostWindowProps {
 
 export function CommunityPostWindow({ initialPost, initialComments }: CommunityPostWindowProps) {
   const { authUser } = useAuthUser();
+  const { preferences } = useCommunityPreferences();
   const [post, setPost] = useState(initialPost);
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [postTitleDraft, setPostTitleDraft] = useState(initialPost.title);
@@ -170,6 +173,7 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
         postId: post.id,
         content,
         parentCommentId,
+        authorVisibility: preferences.communityAuthorVisibility,
         userId: authUser.id,
       });
       setComments((prev) => appendCommentToTree(prev, created));
@@ -266,8 +270,16 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
     nodes.map((comment) => (
       <div key={comment.id} style={{ paddingLeft: depth > 0 ? '1rem' : 0, borderLeft: depth > 0 ? '2px solid #eee' : 'none', marginTop: '0.5rem' }}>
         <article style={{ padding: '0.5rem 0' }}>
-          <div style={{ fontSize: '0.88rem', color: '#555', marginBottom: '0.15rem' }}>
-            {comment.authorName} · {new Date(comment.createdAt).toLocaleDateString('ko-KR')}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.15rem', alignItems: 'center' }}>
+            <CommunityProfileModal
+              userId={comment.authorId}
+              viewerId={authUser?.id}
+              displayName={comment.authorVisibility === 'anonymous' ? '익명' : comment.authorName}
+              avatar={comment.authorAvatar}
+              photoUrl={comment.authorPhotoUrl}
+              compact
+            />
+            <span style={{ fontSize: '0.82rem', color: '#555' }}>{new Date(comment.createdAt).toLocaleDateString('ko-KR')}</span>
           </div>
           {editingCommentId === comment.id ? (
             <div style={{ display: 'grid', gap: '0.5rem' }}>
@@ -426,13 +438,21 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
           borderBottom: '2px solid #111',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '2rem', lineHeight: 1.1 }}>{post.title}</h2>
-        <div style={{ display: 'flex', gap: '1rem', fontSize: '1rem', color: '#333', flexWrap: 'wrap' }}>
+        <CommunityProfileModal
+          userId={post.authorId}
+          viewerId={authUser?.id}
+          displayName={post.authorName}
+          avatar={post.authorAvatar}
+          photoUrl={post.authorPhotoUrl}
+        />
+        <div style={{ display: 'flex', gap: '1rem', fontSize: '1rem', color: '#333', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span>날짜 {new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
           <span>조회수 {post.viewCount}</span>
           <span>좋아요 {post.likeCount}</span>
         </div>
       </div>
+
+      <h2 style={{ margin: '0 0 0.85rem', fontSize: '2rem', lineHeight: 1.1 }}>{post.title}</h2>
 
       <section
         style={{

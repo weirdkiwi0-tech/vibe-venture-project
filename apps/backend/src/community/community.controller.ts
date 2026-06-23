@@ -89,6 +89,27 @@ export class CommunityController {
     return this.communityService.getPostComments(id, viewerId);
   }
 
+  @Get('profiles/:id')
+  async getProfile(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('currentUserId') currentUserId?: string,
+    @Headers('x-user-id') currentUserHeader?: string,
+  ) {
+    const viewerId = this.resolveAuthenticatedUserId(req, currentUserHeader) ?? currentUserId;
+    return this.communityService.getProfile(id, viewerId);
+  }
+
+  @Get('mailbox')
+  async getMailbox(@Req() req: Request, @Headers('x-user-id') currentUserId?: string) {
+    const viewerId = this.resolveAuthenticatedUserId(req, currentUserId);
+    if (!viewerId) {
+      throw new UnauthorizedException('login required to view mailbox');
+    }
+
+    return this.communityService.getMailbox(viewerId);
+  }
+
   @Post('posts/:id/comments')
   async createPostComment(
     @Param('id') id: string,
@@ -103,7 +124,7 @@ export class CommunityController {
 
     return this.communityService.createPostComment(
       id,
-      { content: body.content, parentCommentId: body.parentCommentId },
+      { content: body.content, parentCommentId: body.parentCommentId, authorVisibility: body.authorVisibility },
       userId,
     );
   }
@@ -179,6 +200,11 @@ export class CommunityController {
   @Post('friend-requests/:id/accept')
   async acceptFriendRequest(@Param('id') id: string, @Headers('x-user-id') currentUserId?: string) {
     return this.communityService.acceptFriendRequest(id, currentUserId);
+  }
+
+  @Post('friend-requests/:id/reject')
+  async rejectFriendRequest(@Param('id') id: string, @Headers('x-user-id') currentUserId?: string) {
+    return this.communityService.rejectFriendRequest(id, currentUserId);
   }
 
   @Post('messages/direct')

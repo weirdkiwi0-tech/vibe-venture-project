@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { href: '/videos/new', label: '영상찍기', roles: ['user', 'admin'] as const },
   { href: '/videos', label: '풀이영상', roles: ['user', 'admin'] as const },
   { href: '/community', label: '커뮤니티', roles: ['user', 'admin'] as const },
+  { href: '/mailbox', label: '우편함', roles: ['user', 'admin'] as const },
   { href: '/questions', label: '질문 목록', roles: ['user', 'admin'] as const },
   { href: '/questions/new', label: '질문 작성', roles: ['user', 'admin'] as const },
   { href: '/settings', label: '설정', roles: ['user', 'admin'] as const },

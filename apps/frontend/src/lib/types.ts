@@ -56,6 +56,9 @@ export interface CommunityPostSummary {
   createdAt: string;
   authorId: string;
   authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
+  authorVisibility: 'nickname' | 'anonymous';
 }
 
 export interface CommunityPostDetail extends CommunityPostSummary {
@@ -69,6 +72,9 @@ export interface CommunityPostCommentItem {
   postId: string;
   authorId: string;
   authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
+  authorVisibility: 'nickname' | 'anonymous';
   content: string;
   parentCommentId: string | null;
   createdAt: string;
@@ -81,6 +87,7 @@ export interface CommunityFriendItem {
   id: string;
   name: string;
   avatar: string;
+  photoUrl?: string;
 }
 
 export interface CommunityBoardResponse {
@@ -129,6 +136,40 @@ export interface CommunityProfileDetailResponse {
   canChat: boolean;
   pendingFriendRequestId: string | null;
   incomingFriendRequestId: string | null;
+}
+
+export interface CommunityMailboxNotification {
+  id: string;
+  type: 'friend-request' | 'notice';
+  title: string;
+  message: string;
+  actorId?: string;
+  actorName?: string;
+  actorAvatar?: string;
+  actorPhotoUrl?: string;
+  relatedRequestId?: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface CommunityMailboxFriendRequest {
+  id: string;
+  requesterId: string;
+  targetId: string;
+  requesterName: string;
+  requesterAvatar: string;
+  requesterPhotoUrl?: string;
+  targetName: string;
+  targetAvatar: string;
+  targetPhotoUrl?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityMailboxResponse {
+  notifications: CommunityMailboxNotification[];
+  friendRequests: CommunityMailboxFriendRequest[];
 }
 
 export interface QuestionItem {
@@ -264,6 +305,9 @@ export interface VideoCommentItem {
   id: string;
   videoId: string;
   authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
   content: string;
   createdAt: string;
   likeCount: number;

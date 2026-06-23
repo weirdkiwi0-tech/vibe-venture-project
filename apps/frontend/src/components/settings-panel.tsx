@@ -2,23 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { getLogoutUrl } from '../lib/api';
+import {
+  COMMUNITY_PREFERENCES_STORAGE_KEY,
+  DEFAULT_COMMUNITY_PREFERENCES,
+  normalizeCommunityPreferences,
+  type CommunityPreferences,
+} from '../lib/community-preferences';
 import { useAuthUser } from './role-provider';
 
 type SaveState = 'idle' | 'saving' | 'saved';
 
-interface AppSettings {
-  pushNotifications: boolean;
-  communityOnlyMode: boolean;
-  profileVisibility: 'public' | 'friends';
-}
-
-const STORAGE_KEY = 'keepit-settings-v1';
-
-const DEFAULT_SETTINGS: AppSettings = {
-  pushNotifications: true,
-  communityOnlyMode: false,
-  profileVisibility: 'public',
-};
+type AppSettings = CommunityPreferences;
 
 export function SettingsPanel() {
   const { authResolved, authUser } = useAuthUser();
@@ -26,26 +20,21 @@ export function SettingsPanel() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(COMMUNITY_PREFERENCES_STORAGE_KEY);
     if (!raw) {
       return;
     }
 
     try {
-      const parsed = JSON.parse(raw) as Partial<AppSettings>;
-      setSettings({
-        pushNotifications: parsed.pushNotifications ?? DEFAULT_SETTINGS.pushNotifications,
-        communityOnlyMode: parsed.communityOnlyMode ?? DEFAULT_SETTINGS.communityOnlyMode,
-        profileVisibility: parsed.profileVisibility === 'friends' ? 'friends' : 'public',
-      });
+      setSettings(normalizeCommunityPreferences(JSON.parse(raw)));
     } catch {
-      setSettings(DEFAULT_SETTINGS);
+      setSettings(DEFAULT_COMMUNITY_PREFERENCES);
     }
   }, []);
 
   async function save(nextSettings: AppSettings) {
     setSaveState('saving');
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSettings));
+    window.localStorage.setItem(COMMUNITY_PREFERENCES_STORAGE_KEY, JSON.stringify(nextSettings));
     setSaveState('saved');
     window.setTimeout(() => setSaveState('idle'), 1200);
   }
@@ -138,6 +127,54 @@ export function SettingsPanel() {
             }}
           >
             친구에게만 공개
+          </button>
+        </div>
+      </article>
+
+      <article className="surface-card">
+        <div className="card-meta">커뮤니티 표시</div>
+        <h3>댓글과 대댓글 표시 방식</h3>
+        <p>커뮤니티 게시글, 댓글, 대댓글은 기본적으로 닉네임으로 보이고, 원하면 익명으로 바꿀 수 있습니다.</p>
+        <div className="visibility-toggle" role="radiogroup" aria-label="커뮤니티 표시 방식">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={settings.communityAuthorVisibility === 'nickname'}
+            className={`visibility-option ${settings.communityAuthorVisibility === 'nickname' ? 'active' : ''}`}
+            onClick={async () => {
+              if (settings.communityAuthorVisibility === 'nickname') {
+                return;
+              }
+
+              const nextSettings = {
+                ...settings,
+                communityAuthorVisibility: 'nickname' as const,
+              };
+              setSettings(nextSettings);
+              await save(nextSettings);
+            }}
+          >
+            닉네임 표시
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={settings.communityAuthorVisibility === 'anonymous'}
+            className={`visibility-option ${settings.communityAuthorVisibility === 'anonymous' ? 'active' : ''}`}
+            onClick={async () => {
+              if (settings.communityAuthorVisibility === 'anonymous') {
+                return;
+              }
+
+              const nextSettings = {
+                ...settings,
+                communityAuthorVisibility: 'anonymous' as const,
+              };
+              setSettings(nextSettings);
+              await save(nextSettings);
+            }}
+          >
+            익명 표시
           </button>
         </div>
       </article>

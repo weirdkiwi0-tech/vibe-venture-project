@@ -10,6 +10,9 @@ export interface VideoCommentItem {
   id: string;
   videoId: string;
   authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
   content: string;
   createdAt: Date;
   likeCount: number;
@@ -206,6 +209,9 @@ export class VideosService {
       id: row.id,
       videoId: row.videoId,
       authorId: row.authorId,
+      authorName: this.resolveAuthorName(row.authorId),
+      authorAvatar: this.resolveAuthorAvatar(row.authorId),
+      authorPhotoUrl: this.resolveAuthorPhotoUrl(row.authorId),
       content: row.content,
       createdAt: new Date(row.createdAt),
       likeCount: Number(row.likeCount ?? 0),
@@ -228,6 +234,9 @@ export class VideosService {
       id: randomUUID(),
       videoId,
       authorId,
+      authorName: this.resolveAuthorName(authorId),
+      authorAvatar: this.resolveAuthorAvatar(authorId),
+      authorPhotoUrl: this.resolveAuthorPhotoUrl(authorId),
       content,
       createdAt: new Date(),
       likeCount: 0,
@@ -295,5 +304,18 @@ export class VideosService {
 
   private shouldIncreaseViewCount(viewerId?: string): boolean {
     return true;
+  }
+
+  private resolveAuthorName(authorId: string) {
+    return this.authService?.getUserById(authorId)?.displayName ?? '알 수 없음';
+  }
+
+  private resolveAuthorAvatar(authorId: string) {
+    const name = this.resolveAuthorName(authorId).trim();
+    return name ? name.slice(0, 1).toUpperCase() : 'U';
+  }
+
+  private resolveAuthorPhotoUrl(authorId: string) {
+    return this.authService?.getUserById(authorId)?.photoUrl ?? undefined;
   }
 }

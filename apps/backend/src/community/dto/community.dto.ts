@@ -55,4 +55,8 @@ export class CreateCommunityCommentDto {
   @IsOptional()
   @IsString()
   parentCommentId?: string;
+
+  @IsOptional()
+  @IsString()
+  authorVisibility?: 'nickname' | 'anonymous';
 }

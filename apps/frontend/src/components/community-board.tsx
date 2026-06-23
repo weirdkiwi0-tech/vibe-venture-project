@@ -8,6 +8,7 @@ import {
 } from '../lib/api';
 import { useAuthUser } from './role-provider';
 import type { CommunityBoardResponse } from '../lib/types';
+import { CommunityProfileModal } from './community-profile-modal';
 
 interface CommunityBoardProps {
   initialBoard: CommunityBoardResponse;
@@ -112,13 +113,19 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                 style={{ cursor: 'pointer', padding: '0.75rem 1rem' }}
                 onClick={() => openPost(post.id)}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong style={{ fontSize: '0.95rem' }}>{post.title}</strong>
-                  <span style={{ fontSize: '0.78rem', color: '#888', whiteSpace: 'nowrap', marginLeft: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                  <CommunityProfileModal
+                    userId={post.authorId}
+                    viewerId={currentUserId}
+                    displayName={post.authorName}
+                    avatar={post.authorAvatar}
+                    photoUrl={post.authorPhotoUrl}
+                  />
+                  <span style={{ fontSize: '0.78rem', color: '#888', whiteSpace: 'nowrap', marginTop: '0.25rem' }}>
                     조회 {post.viewCount} · 좋아요 {post.likeCount} · {new Date(post.createdAt).toLocaleDateString('ko-KR')}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.2rem' }}>{post.authorName}</div>
+                <strong style={{ fontSize: '0.95rem' }}>{post.title}</strong>
               </article>
             ))
           )}

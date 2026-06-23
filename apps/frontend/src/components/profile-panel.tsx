@@ -138,9 +138,22 @@ export function ProfilePanel() {
       setFriendsError('');
       try {
         const board = await getCommunityBoard(authUser.id);
+        const friendDetails = await Promise.all(
+          board.friends.map(async (friend) => {
+            try {
+              return await getCommunityProfile(friend.id, authUser.id);
+            } catch {
+              return null;
+            }
+          }),
+        );
         if (!mounted) return;
         setFriends(toProfileSummaries(board.friends));
-        setPendingIncoming([]);
+        setPendingIncoming(
+          friendDetails
+            .filter((detail): detail is CommunityProfileDetailResponse => Boolean(detail?.incomingFriendRequestId))
+            .map((detail) => detail.profile),
+        );
         setPendingOutgoing([]);
       } catch (err) {
         if (!mounted) return;
@@ -352,8 +365,22 @@ export function ProfilePanel() {
 
   const refreshFriends = async () => {
     const board = await getCommunityBoard(authUser.id);
+    const friendDetails = await Promise.all(
+      board.friends.map(async (friend) => {
+        try {
+          return await getCommunityProfile(friend.id, authUser.id);
+        } catch {
+          return null;
+        }
+      }),
+    );
+
     setFriends(toProfileSummaries(board.friends));
-    setPendingIncoming([]);
+    setPendingIncoming(
+      friendDetails
+        .filter((detail): detail is CommunityProfileDetailResponse => Boolean(detail?.incomingFriendRequestId))
+        .map((detail) => detail.profile),
+    );
     setPendingOutgoing([]);
   };
 
@@ -514,16 +541,16 @@ export function ProfilePanel() {
                     <div className="empty-state">작성한 커뮤니티 게시글이 없습니다.</div>
                   ) : (
                     myPosts.map((item) => (
-                              <div key={item.id} className="surface-card profile-activity-item">
-                                <div className="profile-activity-topline">
-                                  <strong>{item.title}</strong>
-                                </div>
-                                <p>{item.content}</p>
-                                <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
-                                <div className="hero-actions">
-                                  <a className="secondary-button" href={`/community/posts/${item.id}`}>보기</a>
-                                  <button type="button" className="secondary-button" onClick={() => void handleDeletePost(item.id)}>삭제</button>
-                                </div>
+                      <div key={item.id} className="surface-card profile-activity-item">
+                        <div className="profile-activity-topline">
+                          <a className="text-link" href={`/community/posts/${item.id}`}>
+                            <strong>{item.title}</strong>
+                          </a>
+                        </div>
+                        <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
+                        <div className="hero-actions">
+                          <button type="button" className="secondary-button" onClick={() => void handleDeletePost(item.id)}>삭제</button>
+                        </div>
                       </div>
                     ))
                   )}
