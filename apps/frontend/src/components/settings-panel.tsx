@@ -16,7 +16,7 @@ type AppSettings = CommunityPreferences;
 
 export function SettingsPanel() {
   const { authResolved, authUser } = useAuthUser();
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_COMMUNITY_PREFERENCES);
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
   useEffect(() => {
