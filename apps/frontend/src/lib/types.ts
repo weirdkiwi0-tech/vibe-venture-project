@@ -103,6 +103,7 @@ export interface CommunityProfileSummary {
   id: string;
   name: string;
   role: 'student' | 'mentor';
+  photoUrl?: string;
   school: string;
   grade: string;
   bio: string;
