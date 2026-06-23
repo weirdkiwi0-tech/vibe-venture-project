@@ -148,6 +148,7 @@ export class VideosController {
       authorId: comment.authorId,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),
+      likeCount: comment.likeCount,
     }));
   }
 
@@ -170,7 +171,23 @@ export class VideosController {
       authorId: comment.authorId,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),
+      likeCount: comment.likeCount,
     };
+  }
+
+  @Post(':id/comments/:commentId/like')
+  async likeComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @Req() req: Request,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
+    const userId = this.resolveViewerId(req, userIdHeader);
+    if (!userId) {
+      throw new UnauthorizedException('login required to like comment');
+    }
+
+    return this.videosService.likeComment(id, commentId, userId);
   }
 
   @Get(':id/playback-policy')

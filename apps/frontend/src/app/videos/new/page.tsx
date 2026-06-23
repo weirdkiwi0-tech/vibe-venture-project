@@ -7,6 +7,8 @@ import { SectionCard } from '../../../components/section-card';
 import { useAuthUser } from '../../../components/role-provider';
 import { createVideo } from '../../../lib/api';
 
+const MAX_VIDEO_FILE_SIZE_BYTES = 30 * 1024 * 1024;
+
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -14,6 +16,30 @@ async function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('영상 파일을 읽지 못했습니다.'));
     reader.readAsDataURL(file);
   });
+}
+
+async function getVideoDurationSeconds(file: File): Promise<number> {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const duration = await new Promise<number>((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.src = objectUrl;
+
+      video.onloadedmetadata = () => {
+        resolve(video.duration || 0);
+      };
+
+      video.onerror = () => {
+        reject(new Error('영상 길이를 확인하지 못했습니다.'));
+      };
+    });
+
+    return duration;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -40,6 +66,14 @@ export default function NewVideoPage() {
     setVideoFile(file);
     setPreviewUrl(file ? URL.createObjectURL(file) : '');
     setDuration(0);
+    if (file && file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+      setState('error');
+      setMessage('영상 파일이 너무 큽니다. 30MB 이하 영상으로 다시 시도해주세요.');
+      return;
+    }
+
+    setState('idle');
+    setMessage('');
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -56,6 +90,12 @@ export default function NewVideoPage() {
       return;
     }
 
+    if (videoFile.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+      setState('error');
+      setMessage('영상 파일이 너무 큽니다. 30MB 이하 영상으로 다시 시도해주세요.');
+      return;
+    }
+
     if (!title.trim()) {
       setState('error');
       setMessage('영상 제목을 입력해주세요.');
@@ -66,12 +106,13 @@ export default function NewVideoPage() {
     setMessage('영상을 업로드하는 중입니다...');
 
     try {
+      const resolvedDuration = duration > 0 ? duration : await getVideoDurationSeconds(videoFile);
       const url = await fileToDataUrl(videoFile);
       const created = await createVideo({
         title: title.trim(),
         subject,
         url,
-        durationSeconds: Math.max(1, Math.round(duration || videoFile.size / 25000)),
+        durationSeconds: Math.max(1, Math.round(resolvedDuration)),
         userId: authUser.id,
       });
 
@@ -79,7 +120,12 @@ export default function NewVideoPage() {
       router.refresh();
     } catch (error) {
       setState('error');
-      setMessage(error instanceof Error ? error.message : '영상 업로드에 실패했습니다.');
+      const errorMessage = error instanceof Error ? error.message : '영상 업로드에 실패했습니다.';
+      if (errorMessage.toLowerCase().includes('payload too large')) {
+        setMessage('영상 파일이 너무 커서 업로드할 수 없습니다. 30MB 이하 영상으로 다시 시도해주세요.');
+        return;
+      }
+      setMessage(errorMessage);
     }
   };
 

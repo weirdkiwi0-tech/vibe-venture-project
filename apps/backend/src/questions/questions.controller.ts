@@ -66,6 +66,7 @@ export class QuestionsController {
     attachments: string[];
     parentCommentId: string | null;
     createdAt: string;
+    likeCount: number;
     replies: ReturnType<QuestionsController['mapAnswerComment']>[];
   } {
     return {
@@ -78,6 +79,7 @@ export class QuestionsController {
       attachments: comment.attachments,
       parentCommentId: comment.parentCommentId,
       createdAt: comment.createdAt.toISOString(),
+      likeCount: comment.likeCount,
       replies: comment.replies.map((reply) => this.mapAnswerComment(reply)),
     };
   }
@@ -234,6 +236,19 @@ export class QuestionsController {
 
     const comment = await this.answersService.createComment(answerId, body, userId);
     return this.mapAnswerComment(comment);
+  }
+
+  @Post('answers/:answerId/comments/:commentId/like')
+  async likeAnswerComment(
+    @Param('answerId') answerId: string,
+    @Param('commentId') commentId: string,
+    @Headers('x-user-id') userId?: string,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('login required to like comment');
+    }
+
+    return this.answersService.likeComment(answerId, commentId, userId);
   }
 
   @Delete(':id')

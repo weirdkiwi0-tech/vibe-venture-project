@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from '../auth';
 import {
@@ -6,6 +6,8 @@ import {
   CreateCommunityPostDto,
   CreateFriendRequestDto,
   SendDirectMessageDto,
+  UpdateCommunityCommentDto,
+  UpdateCommunityPostDto,
 } from './dto/community.dto';
 import { CommunityService } from './community.service';
 
@@ -52,6 +54,21 @@ export class CommunityController {
     );
   }
 
+  @Patch('posts/:id')
+  async updatePost(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Body() body: UpdateCommunityPostDto,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
+    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    if (!userId) {
+      throw new UnauthorizedException('login required to edit post');
+    }
+
+    return this.communityService.updatePost(id, { title: body.title, content: body.content }, userId);
+  }
+
   @Get('posts/:id')
   async getPost(
     @Param('id') id: string,
@@ -84,7 +101,42 @@ export class CommunityController {
       throw new UnauthorizedException('login required to comment');
     }
 
-    return this.communityService.createPostComment(id, { content: body.content }, userId);
+    return this.communityService.createPostComment(
+      id,
+      { content: body.content, parentCommentId: body.parentCommentId },
+      userId,
+    );
+  }
+
+  @Patch('posts/:id/comments/:commentId')
+  async updatePostComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @Req() req: Request,
+    @Body() body: UpdateCommunityCommentDto,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
+    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    if (!userId) {
+      throw new UnauthorizedException('login required to edit comment');
+    }
+
+    return this.communityService.updatePostComment(id, commentId, { content: body.content }, userId);
+  }
+
+  @Post('posts/:id/comments/:commentId/like')
+  async likePostComment(
+    @Param('id') id: string,
+    @Param('commentId') commentId: string,
+    @Req() req: Request,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
+    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    if (!userId) {
+      throw new UnauthorizedException('login required to like comment');
+    }
+
+    return this.communityService.likePostComment(id, commentId, userId);
   }
 
   @Get('my/posts')

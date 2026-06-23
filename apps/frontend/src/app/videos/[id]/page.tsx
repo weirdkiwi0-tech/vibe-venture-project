@@ -12,6 +12,7 @@ import {
   deleteVideo,
   getVideoById,
   getVideoComments,
+  likeVideoComment,
   likeVideo,
   trackVideoView,
 } from '../../../lib/api';
@@ -38,6 +39,8 @@ export default function VideoDetailPage() {
   const [viewTracked, setViewTracked] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
+  const [commentLikeLoading, setCommentLikeLoading] = useState<Record<string, boolean>>({});
+  const [likedByComment, setLikedByComment] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
   const guestRedirectedRef = useRef(false);
 
@@ -209,6 +212,24 @@ export default function VideoDetailPage() {
     }
   };
 
+  const handleLikeComment = async (commentId: string) => {
+    if (!video || !authUser) {
+      window.alert('좋아요는 로그인 후 사용할 수 있습니다.');
+      return;
+    }
+
+    setCommentLikeLoading((prev) => ({ ...prev, [commentId]: true }));
+    try {
+      const result = await likeVideoComment({ videoId: video.id, commentId, userId: authUser.id });
+      setComments((prev) => prev.map((comment) => (comment.id === commentId ? { ...comment, likeCount: result.likeCount } : comment)));
+      setLikedByComment((prev) => ({ ...prev, [commentId]: result.liked }));
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '댓글 좋아요에 실패했습니다.');
+    } finally {
+      setCommentLikeLoading((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
   return (
     <SiteShell title="풀이영상 상세" description="큰 화면으로 보고, 댓글과 신고를 바로 처리할 수 있습니다.">
       <SectionCard eyebrow="영상 플레이어" title="풀이영상 크게 보기">
@@ -289,7 +310,16 @@ export default function VideoDetailPage() {
                 {comment.authorId} · {new Date(comment.createdAt).toLocaleString('ko-KR')}
               </div>
               <p style={{ margin: '0.4rem 0 0' }}>{comment.content}</p>
-              <div style={{ marginTop: '0.35rem' }}>
+              <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`heart-like-button ${likedByComment[comment.id] ? 'active' : ''}`}
+                  onClick={() => void handleLikeComment(comment.id)}
+                  disabled={commentLikeLoading[comment.id]}
+                  aria-pressed={likedByComment[comment.id] ?? false}
+                >
+                  ♥ {comment.likeCount ?? 0}
+                </button>
                 <Link
                   href={createReportLink({
                     targetType: 'comment',

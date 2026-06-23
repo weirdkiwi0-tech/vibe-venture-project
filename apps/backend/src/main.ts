@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import { json, urlencoded, type Request, type Response, type NextFunction } from 'express';
 import { AppModule } from './app.module';
 
+const REQUEST_BODY_LIMIT = '50mb';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -32,9 +34,23 @@ async function bootstrap() {
     return staticAllowedOrigins.has(origin) || isLikelyContainerAppOrigin(origin);
   };
 
-  // Base64 첨부파일이 포함된 요청(질문/답변 등록) 수용을 위해 body parser 한도를 상향합니다.
-  app.use(json({ limit: '10mb' }));
-  app.use(urlencoded({ limit: '10mb', extended: true }));
+  // Base64 첨부파일이 포함된 요청(질문/답변/영상 등록) 수용을 위해 body parser 한도를 상향합니다.
+  app.use(json({ limit: REQUEST_BODY_LIMIT }));
+  app.use(urlencoded({ limit: REQUEST_BODY_LIMIT, extended: true }));
+
+  app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'type' in error &&
+      (error as { type?: string }).type === 'entity.too.large'
+    ) {
+      res.status(413).json({ message: 'video payload too large' });
+      return;
+    }
+
+    next(error);
+  });
 
   app.use(cookieParser());
 

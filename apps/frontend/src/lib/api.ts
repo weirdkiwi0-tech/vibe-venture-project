@@ -322,6 +322,16 @@ export async function createAnswerComment(input: {
   });
 }
 
+export async function likeAnswerComment(input: { answerId: string; commentId: string; userId?: string }) {
+  return fetchJson<{ likeCount: number; liked: boolean }>(
+    `/questions/answers/${encodeURIComponent(input.answerId)}/comments/${encodeURIComponent(input.commentId)}/like`,
+    {
+      method: 'POST',
+      headers: withUserIdHeader(input.userId),
+    },
+  );
+}
+
 export async function likeQuestion(questionId: string, userId?: string) {
   return fetchJson<QuestionItem & { liked: boolean }>(`/questions/${encodeURIComponent(questionId)}/like`, {
     method: 'POST',
@@ -557,6 +567,25 @@ export async function createCommunityPost(input: {
   });
 }
 
+export async function updateCommunityPost(input: {
+  postId: string;
+  title: string;
+  content: string;
+  userId: string;
+}) {
+  return fetchJson<CommunityPostDetail>(`/community/posts/${encodeURIComponent(input.postId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-id': input.userId,
+    },
+    body: JSON.stringify({
+      title: input.title,
+      content: input.content,
+    }),
+  });
+}
+
 export async function getCommunityPostComments(postId: string, userId?: string) {
   return fetchJson<CommunityPostCommentItem[]>(`/community/posts/${encodeURIComponent(postId)}/comments`, {
     headers: withUserIdHeader(userId),
@@ -566,19 +595,46 @@ export async function getCommunityPostComments(postId: string, userId?: string) 
 export async function createCommunityPostComment(input: {
   postId: string;
   content: string;
+  parentCommentId?: string;
   userId?: string;
 }) {
   return fetchJson<CommunityPostCommentItem>(`/community/posts/${encodeURIComponent(input.postId)}/comments`, {
     method: 'POST',
     headers: jsonHeaders(withUserIdHeader(input.userId)),
-    body: JSON.stringify({ content: input.content }),
+    body: JSON.stringify({ content: input.content, parentCommentId: input.parentCommentId }),
   });
+}
+
+export async function updateCommunityPostComment(input: {
+  postId: string;
+  commentId: string;
+  content: string;
+  userId?: string;
+}) {
+  return fetchJson<CommunityPostCommentItem>(
+    `/community/posts/${encodeURIComponent(input.postId)}/comments/${encodeURIComponent(input.commentId)}`,
+    {
+      method: 'PATCH',
+      headers: jsonHeaders(withUserIdHeader(input.userId)),
+      body: JSON.stringify({ content: input.content }),
+    },
+  );
 }
 
 export async function likeCommunityPost(postId: string) {
   return fetchJson<{ likeCount: number; liked: boolean }>(`/community/posts/${encodeURIComponent(postId)}/like`, {
     method: 'POST',
   });
+}
+
+export async function likeCommunityPostComment(input: { postId: string; commentId: string; userId?: string }) {
+  return fetchJson<{ likeCount: number; liked: boolean }>(
+    `/community/posts/${encodeURIComponent(input.postId)}/comments/${encodeURIComponent(input.commentId)}/like`,
+    {
+      method: 'POST',
+      headers: withUserIdHeader(input.userId),
+    },
+  );
 }
 
 export async function requestFriend(input: { targetId: string; userId: string }) {
@@ -676,6 +732,16 @@ export async function createVideoComment(input: {
     headers: jsonHeaders(withUserIdHeader(input.userId)),
     body: JSON.stringify({ content: input.content }),
   });
+}
+
+export async function likeVideoComment(input: { videoId: string; commentId: string; userId?: string }) {
+  return fetchJson<{ likeCount: number; liked: boolean }>(
+    `/videos/${encodeURIComponent(input.videoId)}/comments/${encodeURIComponent(input.commentId)}/like`,
+    {
+      method: 'POST',
+      headers: withUserIdHeader(input.userId),
+    },
+  );
 }
 
 export async function createVideo(input: {

@@ -30,6 +30,44 @@ function persistRole(role: UserRole) {
   document.cookie = `${ROLE_COOKIE_NAME}=${role}; path=/; max-age=31536000; samesite=lax`;
 }
 
+function isSameAuthUser(
+  left: RoleContextValue['authUser'],
+  right: RoleContextValue['authUser'],
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.id === right.id &&
+    left.email === right.email &&
+    left.displayName === right.displayName &&
+    left.photoUrl === right.photoUrl &&
+    left.role === right.role
+  );
+}
+
+function isSameBanState(left: BanState | null, right: BanState | null) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.isBanned === right.isBanned &&
+    left.bannedUntil === right.bannedUntil &&
+    left.remainingSeconds === right.remainingSeconds &&
+    left.logoutAfterSeconds === right.logoutAfterSeconds
+  );
+}
+
 export function RoleProvider({ initialRole, children }: { initialRole: UserRole; children: ReactNode }) {
   const [role, setRoleState] = useState<UserRole>(parseUserRole(initialRole));
   const [authUser, setAuthUser] = useState<RoleContextValue['authUser']>(null);
@@ -42,23 +80,25 @@ export function RoleProvider({ initialRole, children }: { initialRole: UserRole;
       const result = await getAuthMe();
       if (result.isAuthenticated && result.user) {
         const normalizedRole = parseUserRole(result.user.role);
-        setAuthUser({ ...result.user, role: normalizedRole });
+        const nextAuthUser = { ...result.user, role: normalizedRole };
+        setAuthUser((prev) => (isSameAuthUser(prev, nextAuthUser) ? prev : nextAuthUser));
         setRoleState(normalizedRole);
         if (result.ban?.isBanned) {
-          setBanState(result.ban);
+          const nextBanState: BanState = result.ban;
+          setBanState((prev) => (isSameBanState(prev, nextBanState) ? prev : nextBanState));
           setLogoutCountdown((prev) => prev ?? result.ban?.logoutAfterSeconds ?? 10);
         } else {
-          setBanState(null);
+          setBanState((prev) => (prev === null ? prev : null));
           setLogoutCountdown(null);
         }
       } else {
-        setAuthUser(null);
-        setBanState(null);
+        setAuthUser((prev) => (prev === null ? prev : null));
+        setBanState((prev) => (prev === null ? prev : null));
         setLogoutCountdown(null);
       }
     } catch {
-      setAuthUser(null);
-      setBanState(null);
+      setAuthUser((prev) => (prev === null ? prev : null));
+      setBanState((prev) => (prev === null ? prev : null));
       setLogoutCountdown(null);
     } finally {
       setAuthResolved(true);

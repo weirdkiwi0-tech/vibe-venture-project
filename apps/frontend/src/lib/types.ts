@@ -70,8 +70,11 @@ export interface CommunityPostCommentItem {
   authorId: string;
   authorName: string;
   content: string;
+  parentCommentId: string | null;
   createdAt: string;
+  likeCount: number;
   isMine: boolean;
+  replies: CommunityPostCommentItem[];
 }
 
 export interface CommunityFriendItem {
@@ -188,6 +191,7 @@ export interface QuestionAnswerCommentItem {
   attachments: string[];
   parentCommentId: string | null;
   createdAt: string;
+  likeCount: number;
   replies: QuestionAnswerCommentItem[];
 }
 
@@ -262,4 +266,5 @@ export interface VideoCommentItem {
   authorId: string;
   content: string;
   createdAt: string;
+  likeCount: number;
 }

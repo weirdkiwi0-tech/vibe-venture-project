@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { createAnswerComment, deleteAnswer, deleteQuestion, likeAnswer, likeQuestion } from '../lib/api';
+import { createAnswerComment, deleteAnswer, deleteQuestion, likeAnswer, likeAnswerComment, likeQuestion } from '../lib/api';
 import { createReportLink } from '../lib/report-links';
 import type { QuestionAnswerCommentItem, QuestionAnswerItem, QuestionItem } from '../lib/types';
 import { useAuthUser } from './role-provider';
@@ -122,6 +122,8 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
   const [openReplyByComment, setOpenReplyByComment] = useState<Record<string, boolean>>({});
   const [likeLoadingByAnswer, setLikeLoadingByAnswer] = useState<Record<string, boolean>>({});
   const [likedByAnswer, setLikedByAnswer] = useState<Record<string, boolean>>({});
+  const [likeLoadingByComment, setLikeLoadingByComment] = useState<Record<string, boolean>>({});
+  const [likedByComment, setLikedByComment] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -250,6 +252,45 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     }
   };
 
+  const updateCommentLikeCount = (
+    comments: QuestionAnswerCommentItem[],
+    commentId: string,
+    likeCount: number,
+  ): QuestionAnswerCommentItem[] =>
+    comments.map((comment) => {
+      if (comment.id === commentId) {
+        return { ...comment, likeCount };
+      }
+
+      if (comment.replies.length === 0) {
+        return comment;
+      }
+
+      return {
+        ...comment,
+        replies: updateCommentLikeCount(comment.replies, commentId, likeCount),
+      };
+    });
+
+  const handleLikeComment = async (answerId: string, commentId: string) => {
+    if (!authUser) {
+      window.alert('좋아요는 로그인 후 사용할 수 있습니다.');
+      return;
+    }
+
+    setLikeLoadingByComment((prev) => ({ ...prev, [commentId]: true }));
+    try {
+      const result = await likeAnswerComment({ answerId, commentId, userId: authUser.id });
+      mutateAnswer(answerId, (answer) => ({
+        ...answer,
+        comments: updateCommentLikeCount(answer.comments ?? [], commentId, result.likeCount),
+      }));
+      setLikedByComment((prev) => ({ ...prev, [commentId]: result.liked }));
+    } finally {
+      setLikeLoadingByComment((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
   const renderComments = (answerId: string, comments: QuestionAnswerCommentItem[], depth = 0) => {
     return comments.map((comment) => (
       <div key={comment.id} className={depth > 0 ? 'reply-thread-nested' : 'reply-thread-root'}>
@@ -282,6 +323,16 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
             }
           >
             답글
+          </button>
+          {' · '}
+          <button
+            type="button"
+            className={`heart-like-button ${likedByComment[comment.id] ? 'active' : ''}`}
+            onClick={() => void handleLikeComment(answerId, comment.id)}
+            disabled={likeLoadingByComment[comment.id]}
+            aria-pressed={likedByComment[comment.id] ?? false}
+          >
+            ♥ {comment.likeCount ?? 0}
           </button>
           {' · '}
           <Link

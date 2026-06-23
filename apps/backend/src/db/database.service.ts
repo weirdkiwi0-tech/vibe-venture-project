@@ -110,6 +110,17 @@ export class DatabaseService implements OnApplicationBootstrap {
       )
     `);
 
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS video_comment_likes (
+        id TEXT PRIMARY KEY,
+        commentId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        UNIQUE(commentId, userId),
+        FOREIGN KEY (commentId) REFERENCES video_comments(id)
+      )
+    `);
+
     // Community posts table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS community_posts (

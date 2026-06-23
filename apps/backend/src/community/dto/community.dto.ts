@@ -21,6 +21,22 @@ export class CreateFriendRequestDto {
   targetId!: string;
 }
 
+export class UpdateCommunityPostDto {
+  @IsString()
+  @IsNotEmpty()
+  title!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
+}
+
+export class UpdateCommunityCommentDto {
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
+}
+
 export class SendDirectMessageDto {
   @IsString()
   @IsNotEmpty()
@@ -35,4 +51,8 @@ export class CreateCommunityCommentDto {
   @IsString()
   @IsNotEmpty()
   content!: string;
+
+  @IsOptional()
+  @IsString()
+  parentCommentId?: string;
 }

@@ -32,12 +32,23 @@ interface FriendRequestResponse {
   updatedAt: string;
 }
 
+interface CommunityPostCommentRecord {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  parentCommentId: string | null;
+  createdAt: string;
+}
+
 @Injectable()
 export class CommunityService {
   private readonly profiles = new Map<string, CommunityProfile>();
   private readonly posts: CommunityPost[] = [];
   private readonly postLikes = new Map<string, Set<string>>();
-  private readonly postComments = new Map<string, CommunityPostComment[]>();
+  private readonly postComments = new Map<string, CommunityPostCommentRecord[]>();
+  private readonly commentLikes = new Map<string, Set<string>>();
   private readonly directMessages: CommunityDirectMessage[] = [];
   private readonly friendships = new Set<string>();
   private readonly friendRequests: FriendRequestRecord[] = [];
@@ -85,6 +96,29 @@ export class CommunityService {
     return this.mapPostDetail(post, authorId);
   }
 
+  async updatePost(
+    postId: string,
+    input: { title: string; content: string },
+    requestUserId: string,
+  ): Promise<CommunityPostDetail> {
+    const post = this.requirePost(postId);
+
+    if (post.authorId !== requestUserId) {
+      throw new ForbiddenException('only author can edit post');
+    }
+
+    const title = input.title.trim();
+    const content = input.content.trim();
+    if (!title || !content) {
+      throw new BadRequestException('title and content are required');
+    }
+
+    post.title = title;
+    post.content = content;
+
+    return this.mapPostDetail(post, requestUserId);
+  }
+
   async getPostDetail(postId: string, currentUserId?: string): Promise<CommunityPostDetail> {
     const post = this.posts.find((p) => p.id === postId);
     if (!post) {
@@ -107,14 +141,12 @@ export class CommunityService {
 
   async getPostComments(postId: string, currentUserId?: string): Promise<CommunityPostComment[]> {
     this.requirePost(postId);
-    const viewerId = currentUserId ?? 'anonymous-user';
-    const comments = this.postComments.get(postId) ?? [];
-    return comments.map((comment) => ({ ...comment, isMine: comment.authorId === viewerId }));
+    return this.buildCommentTree(this.postComments.get(postId) ?? [], currentUserId ?? 'anonymous-user');
   }
 
   async createPostComment(
     postId: string,
-    input: { content: string },
+    input: { content: string; parentCommentId?: string | null },
     authorId: string,
   ): Promise<CommunityPostComment> {
     const post = this.requirePost(postId);
@@ -125,22 +157,83 @@ export class CommunityService {
       throw new BadRequestException('comment content is required');
     }
 
+    const comments = this.postComments.get(postId) ?? [];
+    if (input.parentCommentId && !comments.some((comment) => comment.id === input.parentCommentId)) {
+      throw new NotFoundException('parent comment not found');
+    }
+
     const profile = this.findProfile(authorId);
-    const comment: CommunityPostComment = {
+    const comment: CommunityPostCommentRecord = {
       id: randomUUID(),
       postId: post.id,
       authorId,
       authorName: profile?.name ?? '알 수 없음',
       content,
+      parentCommentId: input.parentCommentId ?? null,
       createdAt: new Date().toISOString(),
-      isMine: true,
     };
 
-    const comments = this.postComments.get(postId) ?? [];
     comments.push(comment);
     this.postComments.set(postId, comments);
 
-    return comment;
+    return this.toCommentNode(comment, authorId, []);
+  }
+
+  async updatePostComment(
+    postId: string,
+    commentId: string,
+    input: { content: string },
+    requestUserId: string,
+  ): Promise<CommunityPostComment> {
+    this.requirePost(postId);
+
+    const comments = this.postComments.get(postId) ?? [];
+    const commentIndex = comments.findIndex((comment) => comment.id === commentId);
+    if (commentIndex < 0) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const comment = comments[commentIndex];
+    if (comment.authorId !== requestUserId) {
+      throw new ForbiddenException('only author can edit comment');
+    }
+
+    const content = input.content.trim();
+    if (!content) {
+      throw new BadRequestException('comment content is required');
+    }
+
+    const updated: CommunityPostCommentRecord = {
+      ...comment,
+      content,
+    };
+    comments[commentIndex] = updated;
+    this.postComments.set(postId, comments);
+
+    return this.toCommentNode(updated, requestUserId, []);
+  }
+
+  async likePostComment(
+    postId: string,
+    commentId: string,
+    userId: string,
+  ): Promise<{ likeCount: number; liked: boolean }> {
+    this.requirePost(postId);
+    const comments = this.postComments.get(postId) ?? [];
+    if (!comments.some((comment) => comment.id === commentId)) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const likes = this.commentLikes.get(commentId) ?? new Set<string>();
+    if (likes.has(userId)) {
+      likes.delete(userId);
+      this.commentLikes.set(commentId, likes);
+      return { likeCount: likes.size, liked: false };
+    }
+
+    likes.add(userId);
+    this.commentLikes.set(commentId, likes);
+    return { likeCount: likes.size, liked: true };
   }
 
   async likePost(postId: string, userId: string): Promise<{ likeCount: number; liked: boolean }> {
@@ -359,6 +452,54 @@ export class CommunityService {
 
     this.profiles.set(profile.id, profile);
     return profile;
+  }
+
+  private buildCommentTree(records: CommunityPostCommentRecord[], viewerId: string): CommunityPostComment[] {
+    const nodes = new Map<string, CommunityPostComment>();
+    const roots: CommunityPostComment[] = [];
+    const sorted = [...records].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    for (const record of sorted) {
+      nodes.set(record.id, this.toCommentNode(record, viewerId, []));
+    }
+
+    for (const record of sorted) {
+      const node = nodes.get(record.id);
+      if (!node) {
+        continue;
+      }
+
+      if (record.parentCommentId) {
+        const parent = nodes.get(record.parentCommentId);
+        if (parent) {
+          parent.replies.push(node);
+          continue;
+        }
+      }
+
+      roots.push(node);
+    }
+
+    return roots;
+  }
+
+  private toCommentNode(
+    record: CommunityPostCommentRecord,
+    viewerId: string,
+    replies: CommunityPostComment[],
+  ): CommunityPostComment {
+    return {
+      id: record.id,
+      postId: record.postId,
+      authorId: record.authorId,
+      authorName: record.authorName,
+      content: record.content,
+      parentCommentId: record.parentCommentId,
+      createdAt: record.createdAt,
+      likeCount: this.commentLikes.get(record.id)?.size ?? 0,
+      isMine: record.authorId === viewerId,
+      replies,
+    };
   }
 
   private requireProfile(id: string): CommunityProfile {

@@ -521,7 +521,7 @@ export function ProfilePanel() {
                                 <p>{item.content}</p>
                                 <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
                                 <div className="hero-actions">
-                                  <a className="secondary-button" href="/community">커뮤니티 이동</a>
+                                  <a className="secondary-button" href={`/community/posts/${item.id}`}>보기</a>
                                   <button type="button" className="secondary-button" onClick={() => void handleDeletePost(item.id)}>삭제</button>
                                 </div>
                       </div>

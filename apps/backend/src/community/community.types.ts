@@ -40,8 +40,11 @@ export interface CommunityPostComment {
   authorId: string;
   authorName: string;
   content: string;
+  parentCommentId: string | null;
   createdAt: string;
+  likeCount: number;
   isMine: boolean;
+  replies: CommunityPostComment[];
 }
 
 export interface CommunityFriendItem {

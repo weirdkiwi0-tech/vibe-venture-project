@@ -12,6 +12,7 @@ export interface VideoCommentItem {
   authorId: string;
   content: string;
   createdAt: Date;
+  likeCount: number;
 }
 
 @Injectable()
@@ -185,8 +186,21 @@ export class VideosService {
     }
 
     const rows = db
-      .prepare('SELECT id, videoId, authorId, content, createdAt FROM video_comments WHERE videoId = ? ORDER BY createdAt ASC')
-      .all(videoId) as Array<{ id: string; videoId: string; authorId: string; content: string; createdAt: string }>;
+      .prepare(`
+        SELECT
+          vc.id,
+          vc.videoId,
+          vc.authorId,
+          vc.content,
+          vc.createdAt,
+          COUNT(vcl.id) AS likeCount
+        FROM video_comments vc
+        LEFT JOIN video_comment_likes vcl ON vcl.commentId = vc.id
+        WHERE vc.videoId = ?
+        GROUP BY vc.id, vc.videoId, vc.authorId, vc.content, vc.createdAt
+        ORDER BY vc.createdAt ASC
+      `)
+      .all(videoId) as Array<{ id: string; videoId: string; authorId: string; content: string; createdAt: string; likeCount: number }>;
 
     return rows.map((row) => ({
       id: row.id,
@@ -194,6 +208,7 @@ export class VideosService {
       authorId: row.authorId,
       content: row.content,
       createdAt: new Date(row.createdAt),
+      likeCount: Number(row.likeCount ?? 0),
     }));
   }
 
@@ -215,6 +230,7 @@ export class VideosService {
       authorId,
       content,
       createdAt: new Date(),
+      likeCount: 0,
     };
 
     db.prepare(
@@ -222,6 +238,41 @@ export class VideosService {
     ).run(comment.id, comment.videoId, comment.authorId, comment.content, comment.createdAt.toISOString());
 
     return comment;
+  }
+
+  async likeComment(videoId: string, commentId: string, userId: string): Promise<{ likeCount: number; liked: boolean }> {
+    await this.findById(videoId);
+    const db = this.databaseService?.getDatabase();
+    if (!db) {
+      throw new BadRequestException('database unavailable');
+    }
+
+    const comment = db.prepare('SELECT id FROM video_comments WHERE id = ? AND videoId = ?').get(
+      commentId,
+      videoId,
+    ) as { id: string } | undefined;
+    if (!comment) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const existing = db.prepare('SELECT id FROM video_comment_likes WHERE commentId = ? AND userId = ?').get(
+      commentId,
+      userId,
+    ) as { id: string } | undefined;
+
+    if (existing) {
+      db.prepare('DELETE FROM video_comment_likes WHERE id = ?').run(existing.id);
+    } else {
+      db.prepare('INSERT INTO video_comment_likes (id, commentId, userId, createdAt) VALUES (?, ?, ?, ?)').run(
+        randomUUID(),
+        commentId,
+        userId,
+        new Date().toISOString(),
+      );
+    }
+
+    const row = db.prepare('SELECT COUNT(*) AS count FROM video_comment_likes WHERE commentId = ?').get(commentId) as { count: number };
+    return { likeCount: Number(row.count ?? 0), liked: !existing };
   }
 
   async deleteById(id: string, requestUserId: string) {

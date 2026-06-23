@@ -28,6 +28,7 @@ export interface AnswerCommentNode {
   attachments: string[];
   parentCommentId: string | null;
   createdAt: Date;
+  likeCount: number;
   replies: AnswerCommentNode[];
 }
 
@@ -41,6 +42,7 @@ export interface AnswerWithMeta {
 export class AnswersService {
   private readonly likesByAnswerId = new Map<string, Set<string>>();
   private readonly commentsByAnswerId = new Map<string, AnswerCommentRecord[]>();
+  private readonly commentLikesByCommentId = new Map<string, Set<string>>();
 
   constructor(
     @Inject(ANSWER_REPOSITORY)
@@ -125,6 +127,25 @@ export class AnswersService {
     return this.buildCommentTree(this.commentsByAnswerId.get(answerId) ?? []);
   }
 
+  async likeComment(answerId: string, commentId: string, userId: string): Promise<{ likeCount: number; liked: boolean }> {
+    await this.requireAnswer(answerId);
+    const comments = this.commentsByAnswerId.get(answerId) ?? [];
+    if (!comments.some((comment) => comment.id === commentId)) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const likes = this.commentLikesByCommentId.get(commentId) ?? new Set<string>();
+    if (likes.has(userId)) {
+      likes.delete(userId);
+      this.commentLikesByCommentId.set(commentId, likes);
+      return { likeCount: likes.size, liked: false };
+    }
+
+    likes.add(userId);
+    this.commentLikesByCommentId.set(commentId, likes);
+    return { likeCount: likes.size, liked: true };
+  }
+
   async findByQuestionIdWithMeta(questionId: string): Promise<AnswerWithMeta[]> {
     const answers = await this.findByQuestionId(questionId);
     return answers.map((answer) => ({
@@ -161,6 +182,9 @@ export class AnswersService {
 
     await this.answerRepository.deleteById(answerId);
     this.likesByAnswerId.delete(answerId);
+    for (const comment of this.commentsByAnswerId.get(answerId) ?? []) {
+      this.commentLikesByCommentId.delete(comment.id);
+    }
     this.commentsByAnswerId.delete(answerId);
   }
 
@@ -210,6 +234,7 @@ export class AnswersService {
       attachments: record.attachments,
       parentCommentId: record.parentCommentId,
       createdAt: record.createdAt,
+      likeCount: this.commentLikesByCommentId.get(record.id)?.size ?? 0,
       replies,
     };
   }
