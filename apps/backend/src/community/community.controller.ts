@@ -192,27 +192,57 @@ export class CommunityController {
 
   @Post('friend-requests')
   async createFriendRequest(
+    @Req() req: Request,
     @Body() body: CreateFriendRequestDto,
-    @Headers('x-user-id') requesterId?: string,
+    @Headers('x-user-id') requesterIdHeader?: string,
   ) {
-    return this.communityService.requestFriend(requesterId ?? 'student-jun', body.targetId);
+    const requesterId = this.resolveAuthenticatedUserId(req, requesterIdHeader);
+    if (!requesterId) {
+      throw new UnauthorizedException('login required to request friend');
+    }
+
+    return this.communityService.requestFriend(requesterId, body.targetId);
   }
 
   @Post('friend-requests/:id/accept')
-  async acceptFriendRequest(@Param('id') id: string, @Headers('x-user-id') currentUserId?: string) {
+  async acceptFriendRequest(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Headers('x-user-id') currentUserIdHeader?: string,
+  ) {
+    const currentUserId = this.resolveAuthenticatedUserId(req, currentUserIdHeader);
+    if (!currentUserId) {
+      throw new UnauthorizedException('login required to accept friend request');
+    }
+
     return this.communityService.acceptFriendRequest(id, currentUserId);
   }
 
   @Post('friend-requests/:id/reject')
-  async rejectFriendRequest(@Param('id') id: string, @Headers('x-user-id') currentUserId?: string) {
+  async rejectFriendRequest(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Headers('x-user-id') currentUserIdHeader?: string,
+  ) {
+    const currentUserId = this.resolveAuthenticatedUserId(req, currentUserIdHeader);
+    if (!currentUserId) {
+      throw new UnauthorizedException('login required to reject friend request');
+    }
+
     return this.communityService.rejectFriendRequest(id, currentUserId);
   }
 
   @Post('messages/direct')
   async sendDirectMessage(
+    @Req() req: Request,
     @Body() body: SendDirectMessageDto,
-    @Headers('x-user-id') senderId?: string,
+    @Headers('x-user-id') senderIdHeader?: string,
   ) {
+    const senderId = this.resolveAuthenticatedUserId(req, senderIdHeader);
+    if (!senderId) {
+      throw new UnauthorizedException('login required to send direct message');
+    }
+
     return this.communityService.sendDirectMessage(
       {
         recipientId: body.recipientId,

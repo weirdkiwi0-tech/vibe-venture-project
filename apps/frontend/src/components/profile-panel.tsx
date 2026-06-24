@@ -14,8 +14,6 @@ import {
   getMyCommunityPosts,
   getMyQuestions,
   getMyVideos,
-  requestFriend,
-  sendDirectMessage,
   signInLocal,
   signUpLocal,
 } from '../lib/api';
@@ -28,6 +26,7 @@ import type {
   MyVideoItem,
   QuestionItem,
 } from '../lib/types';
+import { DirectChatModal } from './direct-chat-modal';
 
 type ProfileTab = 'activity' | 'friends';
 type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts';
@@ -88,6 +87,8 @@ export function ProfilePanel() {
   const [friendsError, setFriendsError] = useState('');
   const [selectedFriendProfile, setSelectedFriendProfile] = useState<CommunityProfileDetailResponse | null>(null);
   const [friendDetailLoading, setFriendDetailLoading] = useState(false);
+  const [chatTarget, setChatTarget] = useState<{ id: string; name: string; avatar: string; photoUrl?: string } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const resetSignedOutState = () => {
     setMyQuestions([]);
@@ -665,92 +666,82 @@ export function ProfilePanel() {
                 )}
               </article>
 
-              {/* 선택된 친구 상세 */}
-              {friendDetailLoading ? (
-                <p className="card-meta">불러오는 중…</p>
-              ) : selectedFriendProfile ? (
-                <article className="surface-card">
-                  <div className="profile-friend-detail-header">
-                    <div className="community-person-avatar" style={{ width: 56, height: 56 }}>
-                      {selectedFriendProfile.profile.avatar}
-                    </div>
-                    <div>
-                      <h3 style={{ margin: 0 }}>{selectedFriendProfile.profile.name}</h3>
-                      <p className="card-meta">{selectedFriendProfile.profile.school} · {selectedFriendProfile.profile.grade}</p>
-                      <p className="card-meta">관심 과목: {selectedFriendProfile.profile.subjects.join(', ') || '없음'}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ alignSelf: 'start' }}
-                      onClick={() => setSelectedFriendProfile(null)}
-                    >
-                      닫기
-                    </button>
-                  </div>
-                  <p>{selectedFriendProfile.profile.bio}</p>
-
-                  {/* 최근 게시글 */}
-                  {selectedFriendProfile.recentPosts.length > 0 ? (
-                    <div className="profile-friend-section">
-                      <div className="card-meta">최근 게시글</div>
-                      <div className="stack-list">
-                        {selectedFriendProfile.recentPosts.slice(0, 3).map((post) => (
-                          <div key={post.id} className="community-recent-post-card">
-                            <span className={`community-badge ${post.type === 'problem' ? 'problem' : 'chat'}`}>
-                              {post.type === 'problem' ? '문제 공유' : '자유 채팅'}
-                            </span>
-                            <p>{post.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* 1:1 대화 */}
-                  {selectedFriendProfile.canChat ? (
-                    <div className="profile-friend-section">
-                      <div className="card-meta">1:1 대화</div>
-                      {selectedFriendProfile.messages.length > 0 ? (
-                        <div className="stack-list community-dm-list">
-                          {selectedFriendProfile.messages.map((msg) => (
-                            <div key={msg.id} className={`community-dm-item surface-card ${msg.senderId === authUser.id ? 'mine' : ''}`}>
-                              <div className="card-meta">{msg.senderId === authUser.id ? '나' : selectedFriendProfile.profile.name}</div>
-                              <p>{msg.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="card-meta">아직 대화 기록이 없습니다.</p>
-                      )}
-                      <form
-                        className="form-grid"
-                        style={{ marginTop: '0.5rem' }}
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          const fd = new FormData(e.currentTarget);
-                          const content = String(fd.get('dmContent') ?? '').trim();
-                          if (!content) return;
-                          await sendDirectMessage({ recipientId: selectedFriendProfile.profile.id, content, userId: authUser.id });
-                          const updated = await getCommunityProfile(selectedFriendProfile.profile.id, authUser.id);
-                          setSelectedFriendProfile(updated);
-                          (e.target as HTMLFormElement).reset();
-                        }}
-                      >
-                        <label>
-                          메시지
-                          <textarea name="dmContent" rows={2} required placeholder="메시지를 입력하세요." />
-                        </label>
-                        <button type="submit" className="primary-button">보내기</button>
-                      </form>
-                    </div>
-                  ) : null}
-                </article>
-              ) : null}
+              {friendDetailLoading ? <p className="card-meta">불러오는 중…</p> : null}
             </>
           )}
         </div>
       ) : null}
+
+      {selectedFriendProfile ? (
+        <div className="community-profile-overlay" role="presentation" onClick={() => setSelectedFriendProfile(null)}>
+          <section className="community-profile-modal surface-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="profile-friend-detail-header">
+              <div className="community-person-avatar" style={{ width: 56, height: 56 }}>
+                {selectedFriendProfile.profile.avatar}
+              </div>
+              <div>
+                <h3 style={{ margin: 0 }}>{selectedFriendProfile.profile.name}</h3>
+                <p className="card-meta">{selectedFriendProfile.profile.school} · {selectedFriendProfile.profile.grade}</p>
+                <p className="card-meta">관심 과목: {selectedFriendProfile.profile.subjects.join(', ') || '없음'}</p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ alignSelf: 'start' }}
+                onClick={() => setSelectedFriendProfile(null)}
+              >
+                닫기
+              </button>
+            </div>
+            <p>{selectedFriendProfile.profile.bio}</p>
+
+            {selectedFriendProfile.recentPosts.length > 0 ? (
+              <div className="profile-friend-section">
+                <div className="card-meta">최근 게시글</div>
+                <div className="stack-list">
+                  {selectedFriendProfile.recentPosts.slice(0, 3).map((post) => (
+                    <div key={post.id} className="community-recent-post-card">
+                      <span className={`community-badge ${post.type === 'problem' ? 'problem' : 'chat'}`}>
+                        {post.type === 'problem' ? '문제 공유' : '자유 채팅'}
+                      </span>
+                      <p>{post.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="community-profile-modal-action-row">
+              {selectedFriendProfile.canChat ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    setChatTarget({
+                      id: selectedFriendProfile.profile.id,
+                      name: selectedFriendProfile.profile.name,
+                      avatar: selectedFriendProfile.profile.avatar,
+                      photoUrl: selectedFriendProfile.profile.photoUrl,
+                    });
+                    setChatOpen(true);
+                  }}
+                >
+                  1대1채팅하기
+                </button>
+              ) : (
+                <span className="status-chip">채팅 불가</span>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      <DirectChatModal
+        open={chatOpen}
+        viewerId={authUser.id}
+        target={chatTarget}
+        onClose={() => setChatOpen(false)}
+      />
     </div>
   );
 }

@@ -105,7 +105,7 @@ export class QuestionsController {
     @Query() query: { subject?: string; grade?: string; title?: string },
   ) {
     const viewerId = this.resolveViewerId(req, userIdHeader);
-    const items = await this.questionsService.listTopQuestions(10, {
+    const items = await this.questionsService.listTopQuestions(undefined, {
       subject: query.subject,
       grade: query.grade,
       title: query.title,

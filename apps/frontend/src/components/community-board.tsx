@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   createCommunityPost,
   getCommunityBoard,
-  sendDirectMessage,
 } from '../lib/api';
 import { useAuthUser } from './role-provider';
 import { useCommunityPreferences } from '../lib/community-preferences';
 import type { CommunityBoardResponse } from '../lib/types';
 import { CommunityProfileModal } from './community-profile-modal';
 import { AnonymousProfileBadge } from './anonymous-profile-badge';
+import { DirectChatModal } from './direct-chat-modal';
 
 interface CommunityBoardProps {
   initialBoard: CommunityBoardResponse;
@@ -26,9 +26,8 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerState, setComposerState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [composerMessage, setComposerMessage] = useState('');
-  const [dmTarget, setDmTarget] = useState<{ id: string; name: string } | null>(null);
-  const [dmContent, setDmContent] = useState('');
-  const [dmState, setDmState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [chatTarget, setChatTarget] = useState<{ id: string; name: string; avatar: string; photoUrl?: string } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const currentUserId = authUser?.id ?? 'guest-user';
@@ -54,18 +53,6 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-  };
-
-  const handleSendDm = async () => {
-    if (!authUser || !dmTarget || !dmContent.trim()) return;
-    setDmState('loading');
-    try {
-      await sendDirectMessage({ recipientId: dmTarget.id, content: dmContent, userId: authUser.id });
-      setDmState('done');
-      setDmContent('');
-    } catch {
-      setDmState('error');
-    }
   };
 
   useEffect(() => {
@@ -178,9 +165,8 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                 key={friend.id}
                 type="button"
                 onClick={() => {
-                  setDmTarget(friend);
-                  setDmState('idle');
-                  setDmContent('');
+                  setChatTarget(friend);
+                  setChatOpen(true);
                 }}
                 style={{
                   display: 'flex',
@@ -190,7 +176,7 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                   textAlign: 'left',
                   padding: '0.5rem',
                   borderRadius: '8px',
-                  background: dmTarget?.id === friend.id ? '#eff6ff' : 'none',
+                  background: chatTarget?.id === friend.id ? '#eff6ff' : 'none',
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -201,34 +187,14 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
             ))}
           </div>
         )}
-
-        {/* 1:1 채팅 패널 */}
-        {dmTarget && (
-          <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '8px' }}>
-            <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-              <strong>{dmTarget.name}</strong>에게 메시지
-            </div>
-            <textarea
-              value={dmContent}
-              onChange={(e) => setDmContent(e.target.value)}
-              rows={3}
-              placeholder="메시지를 입력하세요"
-              style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid #ccc', resize: 'none', fontSize: '0.85rem', boxSizing: 'border-box' }}
-            />
-            <button
-              type="button"
-              className="primary-button"
-              style={{ marginTop: '0.4rem', width: '100%', padding: '0.4rem' }}
-              disabled={dmState === 'loading' || !dmContent.trim()}
-              onClick={() => void handleSendDm()}
-            >
-              {dmState === 'loading' ? '전송 중...' : '전송'}
-            </button>
-            {dmState === 'done' && <p style={{ color: 'green', fontSize: '0.8rem', marginTop: '0.3rem' }}>전송 완료!</p>}
-            {dmState === 'error' && <p style={{ color: 'red', fontSize: '0.8rem', marginTop: '0.3rem' }}>전송 실패. 친구 관계를 확인하세요.</p>}
-          </div>
-        )}
       </aside>
+
+      <DirectChatModal
+        open={chatOpen}
+        viewerId={currentUserId}
+        target={chatTarget}
+        onClose={() => setChatOpen(false)}
+      />
 
       {/* ───── 글쓰기 모달 ───── */}
       {composerOpen && (

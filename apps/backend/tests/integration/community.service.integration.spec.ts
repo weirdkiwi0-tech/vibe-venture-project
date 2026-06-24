@@ -115,4 +115,21 @@ describe('CommunityService (integration)', () => {
     expect(receiverPending).toHaveLength(1);
     expect(receiverPending[0].actorId).toBe('student-jun');
   });
+
+  it('supports requestFriend -> accept -> direct message -> getProfile canChat/messages contract', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+
+    const request = await service.requestFriend('student-jun', 'friend-user');
+    await service.acceptFriendRequest(request.id, 'friend-user');
+    await service.sendDirectMessage({ recipientId: 'friend-user', content: '안녕 민지!' }, 'student-jun');
+
+    const profile = await service.getProfile('friend-user', 'student-jun');
+
+    expect(profile.canChat).toBe(true);
+    expect(profile.messages).toHaveLength(1);
+    expect(profile.messages[0].senderId).toBe('student-jun');
+    expect(profile.messages[0].recipientId).toBe('friend-user');
+    expect(profile.messages[0].content).toBe('안녕 민지!');
+    expect(profile.profile.lastMessagePreview).toBe('안녕 민지!');
+  });
 });

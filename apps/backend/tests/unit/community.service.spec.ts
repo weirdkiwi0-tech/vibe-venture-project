@@ -112,4 +112,83 @@ describe('CommunityService (unit)', () => {
     expect(targetNotification).toBeDefined();
     expect(targetNotification?.actorId).toBe('sender-user');
   });
+
+  it('fails to send a direct message when users are not friends', async () => {
+    const authService = {
+      getUserById: (id: string) => {
+        if (id === 'sender-user' || id === 'target-user') {
+          return {
+            id,
+            email: `${id}@example.com`,
+            displayName: id === 'sender-user' ? '보낸사람' : '받는사람',
+            role: 'user',
+          };
+        }
+        return undefined;
+      },
+    } as unknown as AuthService;
+
+    const service = new CommunityService(authService);
+
+    await expect(
+      service.sendDirectMessage({ recipientId: 'target-user', content: '안녕하세요' }, 'sender-user'),
+    ).rejects.toThrow('direct chat is available for friends only');
+  });
+
+  it('succeeds to send a direct message after friend request is accepted', async () => {
+    const authService = {
+      getUserById: (id: string) => {
+        if (id === 'sender-user' || id === 'target-user') {
+          return {
+            id,
+            email: `${id}@example.com`,
+            displayName: id === 'sender-user' ? '보낸사람' : '받는사람',
+            role: 'user',
+          };
+        }
+        return undefined;
+      },
+    } as unknown as AuthService;
+
+    const service = new CommunityService(authService);
+    const request = await service.requestFriend('sender-user', 'target-user');
+    await service.acceptFriendRequest(request.id, 'target-user');
+
+    const sent = await service.sendDirectMessage(
+      { recipientId: 'target-user', content: '친구가 되었네요!' },
+      'sender-user',
+    );
+
+    expect(sent.senderId).toBe('sender-user');
+    expect(sent.recipientId).toBe('target-user');
+    expect(sent.content).toBe('친구가 되었네요!');
+  });
+
+  it('reflects messages and lastMessagePreview in getProfile after direct message exchange', async () => {
+    const authService = {
+      getUserById: (id: string) => {
+        if (id === 'sender-user' || id === 'target-user') {
+          return {
+            id,
+            email: `${id}@example.com`,
+            displayName: id === 'sender-user' ? '보낸사람' : '받는사람',
+            role: 'user',
+          };
+        }
+        return undefined;
+      },
+    } as unknown as AuthService;
+
+    const service = new CommunityService(authService);
+    const request = await service.requestFriend('sender-user', 'target-user');
+    await service.acceptFriendRequest(request.id, 'target-user');
+    await service.sendDirectMessage({ recipientId: 'target-user', content: '첫 메시지' }, 'sender-user');
+
+    const profile = await service.getProfile('target-user', 'sender-user');
+
+    expect(profile.canChat).toBe(true);
+    expect(profile.messages).toHaveLength(1);
+    expect(profile.messages[0].content).toBe('첫 메시지');
+    expect(profile.profile.lastMessagePreview).toBe('첫 메시지');
+  });
 });

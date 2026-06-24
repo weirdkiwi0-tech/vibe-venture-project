@@ -1,5 +1,8 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { rm } from 'fs/promises';
+import { randomUUID } from 'crypto';
+import { resolve } from 'path';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
@@ -8,8 +11,13 @@ import { AuthService } from '../../src/auth';
 describe('Questions API (e2e)', () => {
   let app: INestApplication;
   let authService: AuthService;
+  const originalDbPath = process.env.DB_PATH;
+  let testDbPath = '';
 
   beforeAll(async () => {
+    testDbPath = resolve(process.cwd(), `data/test-questions-e2e-${randomUUID()}.sqlite`);
+    process.env.DB_PATH = testDbPath;
+
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -29,6 +37,12 @@ describe('Questions API (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+    process.env.DB_PATH = originalDbPath;
+    await Promise.all([
+      rm(testDbPath, { force: true }).catch(() => undefined),
+      rm(`${testDbPath}-wal`, { force: true }).catch(() => undefined),
+      rm(`${testDbPath}-shm`, { force: true }).catch(() => undefined),
+    ]);
   });
 
   it('POST /questions -> 201', async () => {

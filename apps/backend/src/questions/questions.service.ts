@@ -100,7 +100,7 @@ export class QuestionsService {
   }
 
   async listTopQuestions(
-    limit = 10,
+    limit: number | undefined = 10,
     filters?: QuestionFilters,
     viewerId?: string,
   ) {
@@ -116,7 +116,11 @@ export class QuestionsService {
       return b.question.createdAt.getTime() - a.question.createdAt.getTime();
     });
 
-    return byPopular.slice(0, limit);
+    if (typeof limit === 'number') {
+      return byPopular.slice(0, limit);
+    }
+
+    return byPopular;
   }
 
   async listAllQuestions(
