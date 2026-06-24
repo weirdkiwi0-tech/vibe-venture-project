@@ -11,6 +11,7 @@ export interface CommunityProfile {
 export interface CommunityPost {
   id: string;
   authorId: string;
+  authorVisibility: 'nickname' | 'anonymous';
   title: string;
   content: string;
   attachments: string[];

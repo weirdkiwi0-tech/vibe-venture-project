@@ -10,6 +10,7 @@ export interface VideoCommentItem {
   id: string;
   videoId: string;
   authorId: string;
+  authorVisibility: 'nickname' | 'anonymous';
   authorName: string;
   authorAvatar: string;
   authorPhotoUrl?: string;
@@ -194,31 +195,33 @@ export class VideosService {
           vc.id,
           vc.videoId,
           vc.authorId,
+          vc.authorVisibility,
           vc.content,
           vc.createdAt,
           COUNT(vcl.id) AS likeCount
         FROM video_comments vc
         LEFT JOIN video_comment_likes vcl ON vcl.commentId = vc.id
         WHERE vc.videoId = ?
-        GROUP BY vc.id, vc.videoId, vc.authorId, vc.content, vc.createdAt
+        GROUP BY vc.id, vc.videoId, vc.authorId, vc.authorVisibility, vc.content, vc.createdAt
         ORDER BY vc.createdAt ASC
       `)
-      .all(videoId) as Array<{ id: string; videoId: string; authorId: string; content: string; createdAt: string; likeCount: number }>;
+      .all(videoId) as Array<{ id: string; videoId: string; authorId: string; authorVisibility: 'nickname' | 'anonymous'; content: string; createdAt: string; likeCount: number }>;
 
     return rows.map((row) => ({
       id: row.id,
       videoId: row.videoId,
       authorId: row.authorId,
-      authorName: this.resolveAuthorName(row.authorId),
-      authorAvatar: this.resolveAuthorAvatar(row.authorId),
-      authorPhotoUrl: this.resolveAuthorPhotoUrl(row.authorId),
+      authorVisibility: row.authorVisibility ?? 'nickname',
+      authorName: row.authorVisibility === 'anonymous' ? '익명' : this.resolveAuthorName(row.authorId),
+      authorAvatar: row.authorVisibility === 'anonymous' ? '익' : this.resolveAuthorAvatar(row.authorId),
+      authorPhotoUrl: row.authorVisibility === 'anonymous' ? undefined : this.resolveAuthorPhotoUrl(row.authorId),
       content: row.content,
       createdAt: new Date(row.createdAt),
       likeCount: Number(row.likeCount ?? 0),
     }));
   }
 
-  async createComment(videoId: string, input: { content: string }, authorId: string): Promise<VideoCommentItem> {
+  async createComment(videoId: string, input: { content: string; authorVisibility?: 'nickname' | 'anonymous' }, authorId: string): Promise<VideoCommentItem> {
     await this.findById(videoId);
     const content = input.content.trim();
     if (!content) {
@@ -234,17 +237,18 @@ export class VideosService {
       id: randomUUID(),
       videoId,
       authorId,
-      authorName: this.resolveAuthorName(authorId),
-      authorAvatar: this.resolveAuthorAvatar(authorId),
-      authorPhotoUrl: this.resolveAuthorPhotoUrl(authorId),
+      authorVisibility: input.authorVisibility ?? 'nickname',
+      authorName: input.authorVisibility === 'anonymous' ? '익명' : this.resolveAuthorName(authorId),
+      authorAvatar: input.authorVisibility === 'anonymous' ? '익' : this.resolveAuthorAvatar(authorId),
+      authorPhotoUrl: input.authorVisibility === 'anonymous' ? undefined : this.resolveAuthorPhotoUrl(authorId),
       content,
       createdAt: new Date(),
       likeCount: 0,
     };
 
     db.prepare(
-      'INSERT INTO video_comments (id, videoId, authorId, content, createdAt) VALUES (?, ?, ?, ?, ?)',
-    ).run(comment.id, comment.videoId, comment.authorId, comment.content, comment.createdAt.toISOString());
+      'INSERT INTO video_comments (id, videoId, authorId, authorVisibility, content, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(comment.id, comment.videoId, comment.authorId, comment.authorVisibility, comment.content, comment.createdAt.toISOString());
 
     return comment;
   }

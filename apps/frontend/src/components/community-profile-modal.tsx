@@ -60,7 +60,14 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
 
   const resolvedProfile = detail?.profile;
   const relationship = resolvedProfile?.relationship ?? 'none';
-  const canRequestFriend = Boolean(effectiveViewerId && effectiveViewerId !== 'guest-user' && effectiveViewerId !== userId && relationship !== 'friend' && relationship !== 'pending-outgoing');
+  const canRequestFriend = Boolean(
+    effectiveViewerId &&
+    effectiveViewerId !== 'guest-user' &&
+    effectiveViewerId !== userId &&
+    relationship !== 'friend' &&
+    relationship !== 'pending-outgoing' &&
+    relationship !== 'pending-incoming',
+  );
 
   return (
     <>
@@ -99,8 +106,10 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
                 <div className="community-profile-modal-action-row">
                   {relationship === 'friend' ? (
                     <span className="status-chip">친구</span>
-                  ) : relationship === 'pending-outgoing' ? (
+                  ) : relationship === 'pending-incoming' ? (
                     <span className="status-chip">요청 보냄</span>
+                  ) : relationship === 'pending-outgoing' ? (
+                    <span className="status-chip">상대 요청 대기</span>
                   ) : relationship === 'self' ? (
                     <span className="status-chip">내 계정</span>
                   ) : canRequestFriend ? (

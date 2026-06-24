@@ -48,6 +48,9 @@ interface CommunityPostCommentRecord {
   createdAt: string;
 }
 
+const ANONYMOUS_AUTHOR_NAME = '익명';
+const ANONYMOUS_AUTHOR_AVATAR = '익';
+
 @Injectable()
 export class CommunityService {
   private readonly profiles = new Map<string, CommunityProfile>();
@@ -82,7 +85,7 @@ export class CommunityService {
   }
 
   async createPost(
-    input: { title: string; content: string; attachments?: string[] },
+    input: { title: string; content: string; attachments?: string[]; authorVisibility?: 'nickname' | 'anonymous' },
     authorId = 'student-jun',
   ): Promise<CommunityPostDetail> {
     this.requireProfile(authorId);
@@ -90,6 +93,7 @@ export class CommunityService {
     const post: CommunityPost = {
       id: randomUUID(),
       authorId,
+      authorVisibility: input.authorVisibility ?? 'nickname',
       title: input.title,
       content: input.content,
       attachments: input.attachments ?? [],
@@ -239,19 +243,21 @@ export class CommunityService {
         };
       });
 
-    const notifications: CommunityMailboxNotification[] = friendRequests.map((request) => ({
-      id: `friend-request-${request.id}`,
-      type: 'friend-request',
-      title: request.status === 'pending' ? '새 친구 요청' : request.status === 'accepted' ? '친구 요청 수락됨' : '친구 요청 처리됨',
-      message: request.status === 'pending' ? `${request.requesterName} 님이 친구 요청을 보냈습니다.` : `${request.requesterName} 님의 친구 요청이 ${request.status === 'accepted' ? '수락' : '거절'}되었습니다.`,
-      actorId: request.requesterId,
-      actorName: request.requesterName,
-      actorAvatar: request.requesterAvatar,
-      actorPhotoUrl: request.requesterPhotoUrl,
-      relatedRequestId: request.id,
-      readAt: null,
-      createdAt: request.updatedAt,
-    }));
+    const notifications: CommunityMailboxNotification[] = friendRequests
+      .filter((request) => request.status !== 'pending' || request.targetId === currentUserId)
+      .map((request) => ({
+        id: `friend-request-${request.id}`,
+        type: 'friend-request',
+        title: request.status === 'pending' ? '새 친구 요청' : request.status === 'accepted' ? '친구 요청 수락됨' : '친구 요청 처리됨',
+        message: request.status === 'pending' ? `${request.requesterName} 님이 친구 요청을 보냈습니다.` : `${request.requesterName} 님의 친구 요청이 ${request.status === 'accepted' ? '수락' : '거절'}되었습니다.`,
+        actorId: request.requesterId,
+        actorName: request.requesterName,
+        actorAvatar: request.requesterAvatar,
+        actorPhotoUrl: request.requesterPhotoUrl,
+        relatedRequestId: request.id,
+        readAt: null,
+        createdAt: request.updatedAt,
+      }));
 
     return { notifications, friendRequests };
   }
@@ -275,14 +281,16 @@ export class CommunityService {
     }
 
     const profile = this.findProfile(authorId);
+    const authorVisibility = input.authorVisibility ?? 'nickname';
+    const isAnonymous = authorVisibility === 'anonymous';
     const comment: CommunityPostCommentRecord = {
       id: randomUUID(),
       postId: post.id,
       authorId,
-      authorName: input.authorVisibility === 'anonymous' ? '익명' : profile?.name ?? '알 수 없음',
-      authorAvatar: profile?.avatar ?? 'U',
-      authorPhotoUrl: profile?.photoUrl,
-      authorVisibility: input.authorVisibility ?? 'nickname',
+      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
+      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
+      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorVisibility,
       content,
       parentCommentId: input.parentCommentId ?? null,
       createdAt: new Date().toISOString(),
@@ -513,6 +521,7 @@ export class CommunityService {
 
   private mapPostSummary(post: CommunityPost): CommunityPostSummary {
     const profile = this.findProfile(post.authorId);
+    const isAnonymous = post.authorVisibility === 'anonymous';
     return {
       id: post.id,
       title: post.title,
@@ -520,15 +529,16 @@ export class CommunityService {
       likeCount: post.likeCount,
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
-      authorName: profile?.name ?? '알 수 없음',
-      authorAvatar: profile?.avatar ?? 'U',
-      authorPhotoUrl: profile?.photoUrl,
-      authorVisibility: 'nickname',
+      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
+      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
+      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorVisibility: post.authorVisibility,
     };
   }
 
   private mapPostDetail(post: CommunityPost, currentUserId: string): CommunityPostDetail {
     const profile = this.findProfile(post.authorId);
+    const isAnonymous = post.authorVisibility === 'anonymous';
     return {
       id: post.id,
       title: post.title,
@@ -538,10 +548,10 @@ export class CommunityService {
       likeCount: post.likeCount,
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
-      authorName: profile?.name ?? '알 수 없음',
-      authorAvatar: profile?.avatar ?? 'U',
-      authorPhotoUrl: profile?.photoUrl,
-      authorVisibility: 'nickname',
+      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
+      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
+      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorVisibility: post.authorVisibility,
       isMine: post.authorId === currentUserId,
     };
   }

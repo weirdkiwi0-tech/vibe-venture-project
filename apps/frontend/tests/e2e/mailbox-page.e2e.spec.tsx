@@ -135,4 +135,43 @@ describe('mailbox page e2e', () => {
 
     expect(await screen.findByText('대기 중인 친구요청이 없습니다.')).toBeInTheDocument();
   });
+
+  it('shows action cards only for incoming pending requests', async () => {
+    getCommunityMailboxMock.mockResolvedValueOnce({
+      notifications: [],
+      friendRequests: [
+        {
+          id: 'request-incoming',
+          requesterId: 'friend-user',
+          targetId: 'student-jun',
+          requesterName: '민지',
+          requesterAvatar: 'M',
+          targetName: '준',
+          targetAvatar: 'J',
+          status: 'pending',
+          createdAt: '2026-06-23T00:00:00.000Z',
+          updatedAt: '2026-06-23T00:00:00.000Z',
+        },
+        {
+          id: 'request-outgoing',
+          requesterId: 'student-jun',
+          targetId: 'friend-user-2',
+          requesterName: '준',
+          requesterAvatar: 'J',
+          targetName: '하늘',
+          targetAvatar: 'H',
+          status: 'pending',
+          createdAt: '2026-06-23T00:00:00.000Z',
+          updatedAt: '2026-06-23T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<MailboxPage />);
+
+    expect(await screen.findByText('친구요청이 도착했습니다. 수락하면 서로 친구로 등록됩니다.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '수락' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '거절' })).toHaveLength(1);
+    expect(screen.queryByText('하늘')).not.toBeInTheDocument();
+  });
 });

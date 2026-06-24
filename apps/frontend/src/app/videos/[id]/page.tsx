@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../../components/section-card';
+import { AnonymousProfileBadge } from '../../../components/anonymous-profile-badge';
 import { CommunityProfileModal } from '../../../components/community-profile-modal';
 import { SiteShell } from '../../../components/site-shell';
 import { useAuthUser } from '../../../components/role-provider';
+import { useCommunityPreferences } from '../../../lib/community-preferences';
 import { createReportLink } from '../../../lib/report-links';
 import {
   createVideoComment,
@@ -29,6 +31,7 @@ export default function VideoDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { authUser, authResolved } = useAuthUser();
+  const { preferences } = useCommunityPreferences();
 
   const id = typeof params?.id === 'string' ? params.id : '';
 
@@ -180,6 +183,7 @@ export default function VideoDetailPage() {
       const created = await createVideoComment({
         videoId: video.id,
         content,
+        authorVisibility: preferences.communityAuthorVisibility,
         userId: authUser.id,
       });
 
@@ -308,14 +312,18 @@ export default function VideoDetailPage() {
           {comments.map((comment) => (
             <article key={comment.id} className="surface-card" style={{ padding: '0.8rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'flex-start' }}>
-                <CommunityProfileModal
-                  userId={comment.authorId}
-                  viewerId={authUser?.id}
-                  displayName={comment.authorName}
-                  avatar={comment.authorAvatar}
-                  photoUrl={comment.authorPhotoUrl}
-                  compact
-                />
+                {comment.authorVisibility === 'anonymous' ? (
+                  <AnonymousProfileBadge compact ariaLabel="익명 댓글 작성자" />
+                ) : (
+                  <CommunityProfileModal
+                    userId={comment.authorId}
+                    viewerId={authUser?.id}
+                    displayName={comment.authorName}
+                    avatar={comment.authorAvatar}
+                    photoUrl={comment.authorPhotoUrl}
+                    compact
+                  />
+                )}
                 <span className="card-meta" style={{ whiteSpace: 'nowrap', marginTop: '0.25rem' }}>{new Date(comment.createdAt).toLocaleString('ko-KR')}</span>
               </div>
               <p style={{ margin: '0.4rem 0 0' }}>{comment.content}</p>

@@ -13,6 +13,10 @@ export class CreateCommunityPostDto {
   @IsArray()
   @IsString({ each: true })
   attachments?: string[];
+
+  @IsOptional()
+  @IsString()
+  authorVisibility?: 'nickname' | 'anonymous';
 }
 
 export class CreateFriendRequestDto {

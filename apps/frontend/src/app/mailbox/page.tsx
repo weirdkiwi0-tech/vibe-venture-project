@@ -13,6 +13,9 @@ export default function MailboxPage() {
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const incomingPendingRequests = mailbox.friendRequests.filter(
+    (request) => request.status === 'pending' && request.targetId === authUser?.id,
+  );
 
   useEffect(() => {
     if (!authResolved) {
@@ -87,10 +90,10 @@ export default function MailboxPage() {
         {loading ? <div className="empty-state">우편함을 불러오는 중입니다...</div> : null}
         {message ? <p className="form-message error">{message}</p> : null}
 
-        {!loading && mailbox.friendRequests.length === 0 ? <div className="empty-state">대기 중인 친구요청이 없습니다.</div> : null}
+        {!loading && incomingPendingRequests.length === 0 ? <div className="empty-state">대기 중인 친구요청이 없습니다.</div> : null}
 
-        <div className="stack-list" style={{ marginTop: mailbox.friendRequests.length > 0 ? '1rem' : 0 }}>
-          {mailbox.friendRequests.map((request) => (
+        <div className="stack-list" style={{ marginTop: incomingPendingRequests.length > 0 ? '1rem' : 0 }}>
+          {incomingPendingRequests.map((request) => (
             <article key={request.id} className="surface-card" style={{ padding: '0.9rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'flex-start', marginBottom: '0.7rem', flexWrap: 'wrap' }}>
                 <CommunityProfileModal

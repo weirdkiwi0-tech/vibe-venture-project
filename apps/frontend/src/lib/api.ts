@@ -558,6 +558,7 @@ export async function createCommunityPost(input: {
   title: string;
   content: string;
   attachments?: string[];
+  authorVisibility?: 'nickname' | 'anonymous';
   userId: string;
 }) {
   return fetchJson('/community/posts', {
@@ -570,6 +571,7 @@ export async function createCommunityPost(input: {
       title: input.title,
       content: input.content,
       attachments: input.attachments ?? [],
+      authorVisibility: input.authorVisibility,
     }),
   });
 }
@@ -743,12 +745,13 @@ export async function getVideoComments(videoId: string) {
 export async function createVideoComment(input: {
   videoId: string;
   content: string;
+  authorVisibility?: 'nickname' | 'anonymous';
   userId?: string;
 }) {
   return fetchJson<VideoCommentItem>(`/videos/${encodeURIComponent(input.videoId)}/comments`, {
     method: 'POST',
     headers: jsonHeaders(withUserIdHeader(input.userId)),
-    body: JSON.stringify({ content: input.content }),
+    body: JSON.stringify({ content: input.content, authorVisibility: input.authorVisibility }),
   });
 }
 

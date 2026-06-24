@@ -5,4 +5,9 @@ export class CreateVideoCommentDto {
   @MinLength(1)
   @MaxLength(1000)
   content!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10)
+  authorVisibility: 'nickname' | 'anonymous' = 'nickname';
 }

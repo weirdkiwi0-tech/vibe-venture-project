@@ -306,6 +306,7 @@ export interface VideoCommentItem {
   id: string;
   videoId: string;
   authorId: string;
+  authorVisibility: 'nickname' | 'anonymous';
   authorName: string;
   authorAvatar: string;
   authorPhotoUrl?: string;

@@ -7,8 +7,10 @@ import {
   sendDirectMessage,
 } from '../lib/api';
 import { useAuthUser } from './role-provider';
+import { useCommunityPreferences } from '../lib/community-preferences';
 import type { CommunityBoardResponse } from '../lib/types';
 import { CommunityProfileModal } from './community-profile-modal';
+import { AnonymousProfileBadge } from './anonymous-profile-badge';
 
 interface CommunityBoardProps {
   initialBoard: CommunityBoardResponse;
@@ -16,6 +18,7 @@ interface CommunityBoardProps {
 
 export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   const { authResolved, authUser } = useAuthUser();
+  const { preferences } = useCommunityPreferences();
   const [board, setBoard] = useState(initialBoard);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
@@ -114,13 +117,17 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                 onClick={() => openPost(post.id)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                  <CommunityProfileModal
-                    userId={post.authorId}
-                    viewerId={currentUserId}
-                    displayName={post.authorName}
-                    avatar={post.authorAvatar}
-                    photoUrl={post.authorPhotoUrl}
-                  />
+                  {post.authorVisibility === 'anonymous' ? (
+                    <AnonymousProfileBadge ariaLabel="익명 작성자" />
+                  ) : (
+                    <CommunityProfileModal
+                      userId={post.authorId}
+                      viewerId={currentUserId}
+                      displayName={post.authorName}
+                      avatar={post.authorAvatar}
+                      photoUrl={post.authorPhotoUrl}
+                    />
+                  )}
                   <span style={{ fontSize: '0.78rem', color: '#888', whiteSpace: 'nowrap', marginTop: '0.25rem' }}>
                     조회 {post.viewCount} · 좋아요 {post.likeCount} · {new Date(post.createdAt).toLocaleDateString('ko-KR')}
                   </span>
@@ -243,7 +250,12 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                 if (!title || !content) return;
                 setComposerState('loading');
                 try {
-                  await createCommunityPost({ title, content, userId: authUser.id });
+                  await createCommunityPost({
+                    title,
+                    content,
+                    authorVisibility: preferences.communityAuthorVisibility,
+                    userId: authUser.id,
+                  });
                   await refreshBoard(1, '');
                   setPage(1);
                   setQuery('');

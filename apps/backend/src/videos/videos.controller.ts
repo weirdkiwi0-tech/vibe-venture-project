@@ -146,6 +146,7 @@ export class VideosController {
       id: comment.id,
       videoId: comment.videoId,
       authorId: comment.authorId,
+      authorVisibility: comment.authorVisibility,
       authorName: comment.authorName,
       authorAvatar: comment.authorAvatar,
       authorPhotoUrl: comment.authorPhotoUrl,
@@ -167,11 +168,16 @@ export class VideosController {
       throw new UnauthorizedException('login required to comment');
     }
 
-    const comment = await this.videosService.createComment(id, { content: body.content }, userId);
+    const comment = await this.videosService.createComment(
+      id,
+      { content: body.content, authorVisibility: body.authorVisibility },
+      userId,
+    );
     return {
       id: comment.id,
       videoId: comment.videoId,
       authorId: comment.authorId,
+      authorVisibility: comment.authorVisibility,
       authorName: comment.authorName,
       authorAvatar: comment.authorAvatar,
       authorPhotoUrl: comment.authorPhotoUrl,

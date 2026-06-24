@@ -104,11 +104,18 @@ export class DatabaseService implements OnApplicationBootstrap {
         id TEXT PRIMARY KEY,
         videoId TEXT NOT NULL,
         authorId TEXT NOT NULL,
+        authorVisibility TEXT NOT NULL DEFAULT 'nickname',
         content TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         FOREIGN KEY (videoId) REFERENCES videos(id)
       )
     `);
+
+    const videoCommentsColumns = this.db.prepare('PRAGMA table_info(video_comments)').all() as Array<{ name: string }>;
+    const hasAuthorVisibilityColumn = videoCommentsColumns.some((column) => column.name === 'authorVisibility');
+    if (!hasAuthorVisibilityColumn) {
+      this.db.exec("ALTER TABLE video_comments ADD COLUMN authorVisibility TEXT NOT NULL DEFAULT 'nickname'");
+    }
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS video_comment_likes (

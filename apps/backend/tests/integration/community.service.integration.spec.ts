@@ -50,4 +50,69 @@ describe('CommunityService (integration)', () => {
     const acceptedRequest = mailbox.friendRequests.find((item) => item.id === accepted.id);
     expect(acceptedRequest?.status).toBe('accepted');
   });
+
+  it('keeps anonymous comment identity masked while nickname comments stay visible', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+
+    const post = await service.createPost(
+      {
+        title: 'masking integration test',
+        content: 'content',
+      },
+      'student-jun',
+    );
+
+    const anonymous = await service.createPostComment(
+      post.id,
+      {
+        content: '익명 댓글',
+        authorVisibility: 'anonymous',
+      },
+      'student-jun',
+    );
+
+    const nickname = await service.createPostComment(
+      post.id,
+      {
+        content: '닉네임 댓글',
+        authorVisibility: 'nickname',
+      },
+      'friend-user',
+    );
+
+    expect(anonymous.authorName).toBe('익명');
+    expect(anonymous.authorAvatar).toBe('익');
+    expect(anonymous.authorPhotoUrl).toBeUndefined();
+
+    const listed = await service.getPostComments(post.id, 'student-jun');
+    const anonymousListed = listed.find((comment) => comment.id === anonymous.id);
+    const nicknameListed = listed.find((comment) => comment.id === nickname.id);
+
+    expect(anonymousListed?.authorName).toBe('익명');
+    expect(anonymousListed?.authorAvatar).toBe('익');
+    expect(anonymousListed?.authorPhotoUrl).toBeUndefined();
+
+    expect(nicknameListed?.authorName).toBe('민지');
+    expect(nicknameListed?.authorAvatar).toBe('민');
+    expect(nicknameListed?.authorPhotoUrl).toBeUndefined();
+  });
+
+  it('emits pending friend request notification only for the receiver mailbox', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+
+    const request = await service.requestFriend('student-jun', 'friend-user');
+    const requesterMailbox = await service.getMailbox('student-jun');
+    const receiverMailbox = await service.getMailbox('friend-user');
+
+    const requesterPending = requesterMailbox.notifications.filter(
+      (notification) => notification.relatedRequestId === request.id && notification.title === '새 친구 요청',
+    );
+    const receiverPending = receiverMailbox.notifications.filter(
+      (notification) => notification.relatedRequestId === request.id && notification.title === '새 친구 요청',
+    );
+
+    expect(requesterPending).toHaveLength(0);
+    expect(receiverPending).toHaveLength(1);
+    expect(receiverPending[0].actorId).toBe('student-jun');
+  });
 });

@@ -14,6 +14,7 @@ import { createReportLink } from '../lib/report-links';
 import { useCommunityPreferences } from '../lib/community-preferences';
 import { useAuthUser } from './role-provider';
 import { CommunityProfileModal } from './community-profile-modal';
+import { AnonymousProfileBadge } from './anonymous-profile-badge';
 import type { CommunityPostCommentItem, CommunityPostDetail } from '../lib/types';
 
 interface CommunityPostWindowProps {
@@ -271,14 +272,18 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
       <div key={comment.id} style={{ paddingLeft: depth > 0 ? '1rem' : 0, borderLeft: depth > 0 ? '2px solid #eee' : 'none', marginTop: '0.5rem' }}>
         <article style={{ padding: '0.5rem 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.15rem', alignItems: 'center' }}>
-            <CommunityProfileModal
-              userId={comment.authorId}
-              viewerId={authUser?.id}
-              displayName={comment.authorVisibility === 'anonymous' ? '익명' : comment.authorName}
-              avatar={comment.authorAvatar}
-              photoUrl={comment.authorPhotoUrl}
-              compact
-            />
+            {comment.authorVisibility === 'anonymous' ? (
+              <AnonymousProfileBadge compact ariaLabel="익명 댓글 작성자" />
+            ) : (
+              <CommunityProfileModal
+                userId={comment.authorId}
+                viewerId={authUser?.id}
+                displayName={comment.authorName}
+                avatar={comment.authorAvatar}
+                photoUrl={comment.authorPhotoUrl}
+                compact
+              />
+            )}
             <span style={{ fontSize: '0.82rem', color: '#555' }}>{new Date(comment.createdAt).toLocaleDateString('ko-KR')}</span>
           </div>
           {editingCommentId === comment.id ? (
@@ -438,13 +443,17 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
           borderBottom: '2px solid #111',
         }}
       >
-        <CommunityProfileModal
-          userId={post.authorId}
-          viewerId={authUser?.id}
-          displayName={post.authorName}
-          avatar={post.authorAvatar}
-          photoUrl={post.authorPhotoUrl}
-        />
+        {post.authorVisibility === 'anonymous' ? (
+          <AnonymousProfileBadge ariaLabel="익명 게시글 작성자" />
+        ) : (
+          <CommunityProfileModal
+            userId={post.authorId}
+            viewerId={authUser?.id}
+            displayName={post.authorName}
+            avatar={post.authorAvatar}
+            photoUrl={post.authorPhotoUrl}
+          />
+        )}
         <div style={{ display: 'flex', gap: '1rem', fontSize: '1rem', color: '#333', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span>날짜 {new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
           <span>조회수 {post.viewCount}</span>

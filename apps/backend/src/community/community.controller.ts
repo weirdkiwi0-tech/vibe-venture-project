@@ -49,6 +49,7 @@ export class CommunityController {
         title: body.title,
         content: body.content,
         attachments: body.attachments,
+        authorVisibility: body.authorVisibility,
       },
       authorId,
     );
