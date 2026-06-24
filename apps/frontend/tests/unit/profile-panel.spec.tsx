@@ -155,7 +155,8 @@ describe('ProfilePanel (unit)', () => {
     await openFriendsTab(user);
     await user.click(screen.getByTitle('민지 프로필 보기'));
 
-    expect(await screen.findByRole('button', { name: '1대1채팅하기' })).toBeInTheDocument();
+    expect(await screen.findByText('친구 프로필')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1대1채팅하기' })).toBeInTheDocument();
   });
 
   it('친구 프로필에서 1대1채팅하기 클릭 시 채팅 모달을 연다', async () => {
@@ -166,7 +167,8 @@ describe('ProfilePanel (unit)', () => {
     await openFriendProfile(user);
     await openDirectChatModal(user);
 
-    expect(await screen.findByText('1:1 채팅 · 민지')).toBeInTheDocument();
+    expect(await screen.findByText('1:1 채팅')).toBeInTheDocument();
+    expect(screen.getAllByRole('dialog').length).toBeGreaterThanOrEqual(2);
   });
 
   it('채팅 권한이 없으면 입력창과 전송 버튼을 숨긴다', async () => {
@@ -215,7 +217,7 @@ describe('ProfilePanel (unit)', () => {
 
     const messageBox = await screen.findByRole('textbox', { name: '메시지' });
     await user.type(messageBox, '반가워!');
-    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.click(screen.getByRole('button', { name: '전송' }));
 
     expect(sendDirectMessageMock).toHaveBeenCalledWith({
       recipientId: 'friend-1',

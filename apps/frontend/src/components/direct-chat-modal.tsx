@@ -79,88 +79,99 @@ export function DirectChatModal({ open, viewerId, target, onClose }: DirectChatM
   }
 
   return (
-    <div className="community-profile-overlay" role="presentation" onClick={onClose}>
-      <section className="community-profile-modal surface-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <div className="profile-friend-detail-header">
-          <span className="community-profile-modal-avatar">
-            <AvatarImage
-              photoUrl={profile?.photoUrl ?? target.photoUrl}
-              displayName={resolvedName}
-              avatar={profile?.avatar ?? target.avatar}
-            />
-          </span>
-          <div>
-            <h3 style={{ margin: 0 }}>1:1 채팅 · {resolvedName}</h3>
-            <p className="card-meta">친구와 안전하게 대화를 나눌 수 있어요.</p>
+    <div className="community-profile-overlay fullscreen" role="presentation" onClick={onClose}>
+      <section className="community-chat-window surface-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <header className="community-chat-header">
+          <div className="community-chat-header-title">
+            <span className="community-profile-modal-avatar community-chat-avatar">
+              <AvatarImage
+                photoUrl={profile?.photoUrl ?? target.photoUrl}
+                displayName={resolvedName}
+                avatar={profile?.avatar ?? target.avatar}
+              />
+            </span>
+            <div>
+              <div className="profile-window-kicker">1:1 채팅</div>
+              <h2>{resolvedName}</h2>
+              <p className="card-meta">메시지는 본인과 친구만 볼 수 있어요.</p>
+            </div>
           </div>
-          <button type="button" className="secondary-button" style={{ alignSelf: 'start' }} onClick={onClose}>
+          <button type="button" className="secondary-button" onClick={onClose}>
             닫기
           </button>
-        </div>
+        </header>
 
         {loading ? <p className="card-meta">채팅 정보를 불러오는 중입니다…</p> : null}
         {error ? <p className="form-message error">{error}</p> : null}
 
         {!loading && !error ? (
-          <>
-            {canChat ? (
-              <>
+          canChat ? (
+            <>
+              <div className="community-chat-thread" aria-label="채팅 내용">
                 {messages.length > 0 ? (
-                  <div className="stack-list community-dm-list" style={{ marginTop: '0.75rem' }}>
-                    {messages.map((msg) => (
-                      <div key={msg.id} className={`community-dm-item surface-card ${msg.senderId === viewerId ? 'mine' : ''}`}>
-                        <div className="card-meta">{msg.senderId === viewerId ? '나' : resolvedName}</div>
-                        <p>{msg.content}</p>
+                  messages.map((msg) => {
+                    const mine = msg.senderId === viewerId;
+                    return (
+                      <div key={msg.id} className={`community-chat-row ${mine ? 'mine' : 'theirs'}`}>
+                        {!mine ? (
+                          <span className="community-chat-peer-avatar">
+                            {profile?.avatar ?? target.avatar}
+                          </span>
+                        ) : null}
+                        <div className={`community-dm-bubble ${mine ? 'outgoing' : 'incoming'}`}>
+                          <div className="community-dm-bubble-meta">{mine ? '나' : resolvedName}</div>
+                          <p>{msg.content}</p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })
                 ) : (
-                  <p className="card-meta" style={{ marginTop: '0.75rem' }}>아직 대화 기록이 없습니다.</p>
+                  <div className="empty-state">아직 대화 기록이 없습니다.</div>
                 )}
+              </div>
 
-                <form
-                  className="form-grid"
-                  style={{ marginTop: '0.75rem' }}
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    const trimmed = content.trim();
-                    if (!trimmed) {
-                      return;
-                    }
-                    setSending(true);
-                    setError('');
-                    try {
-                      await sendDirectMessage({ recipientId: target.id, content: trimmed, userId: viewerId });
-                      setContent('');
-                      const refreshed = await getCommunityProfile(target.id, viewerId);
-                      setDetail(refreshed);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : '메시지 전송에 실패했습니다.');
-                    } finally {
-                      setSending(false);
-                    }
-                  }}
-                >
-                  <label>
-                    메시지
-                    <textarea
-                      value={content}
-                      onChange={(event) => setContent(event.target.value)}
-                      name="dmContent"
-                      rows={3}
-                      required
-                      placeholder="메시지를 입력하세요."
-                    />
-                  </label>
-                  <button type="submit" className="primary-button" disabled={sending || !content.trim()}>
-                    {sending ? '전송 중...' : '보내기'}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <p className="card-meta" style={{ marginTop: '0.75rem' }}>친구가 아니면 1:1 채팅을 시작할 수 없습니다.</p>
-            )}
-          </>
+              <form
+                className="community-chat-composer"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  const trimmed = content.trim();
+                  if (!trimmed) {
+                    return;
+                  }
+                  setSending(true);
+                  setError('');
+                  try {
+                    await sendDirectMessage({ recipientId: target.id, content: trimmed, userId: viewerId });
+                    setContent('');
+                    const refreshed = await getCommunityProfile(target.id, viewerId);
+                    setDetail(refreshed);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : '메시지 전송에 실패했습니다.');
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              >
+                <label className="community-chat-input-wrap">
+                  <span className="sr-only">메시지</span>
+                  <textarea
+                    value={content}
+                    onChange={(event) => setContent(event.target.value)}
+                    name="dmContent"
+                    rows={1}
+                    required
+                    placeholder="메시지를 입력하세요."
+                    className="community-chat-input"
+                  />
+                </label>
+                <button type="submit" className="primary-button" disabled={sending || !content.trim()}>
+                  {sending ? '전송 중...' : '전송'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="empty-state">친구가 아니면 1:1 채팅을 시작할 수 없습니다.</div>
+          )
         ) : null}
       </section>
     </div>

@@ -27,6 +27,7 @@ import type {
   QuestionItem,
 } from '../lib/types';
 import { DirectChatModal } from './direct-chat-modal';
+import { FriendProfileWindow } from './friend-profile-window';
 
 type ProfileTab = 'activity' | 'friends';
 type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts';
@@ -672,69 +673,21 @@ export function ProfilePanel() {
         </div>
       ) : null}
 
-      {selectedFriendProfile ? (
-        <div className="community-profile-overlay" role="presentation" onClick={() => setSelectedFriendProfile(null)}>
-          <section className="community-profile-modal surface-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <div className="profile-friend-detail-header">
-              <div className="community-person-avatar" style={{ width: 56, height: 56 }}>
-                {selectedFriendProfile.profile.avatar}
-              </div>
-              <div>
-                <h3 style={{ margin: 0 }}>{selectedFriendProfile.profile.name}</h3>
-                <p className="card-meta">{selectedFriendProfile.profile.school} · {selectedFriendProfile.profile.grade}</p>
-                <p className="card-meta">관심 과목: {selectedFriendProfile.profile.subjects.join(', ') || '없음'}</p>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ alignSelf: 'start' }}
-                onClick={() => setSelectedFriendProfile(null)}
-              >
-                닫기
-              </button>
-            </div>
-            <p>{selectedFriendProfile.profile.bio}</p>
-
-            {selectedFriendProfile.recentPosts.length > 0 ? (
-              <div className="profile-friend-section">
-                <div className="card-meta">최근 게시글</div>
-                <div className="stack-list">
-                  {selectedFriendProfile.recentPosts.slice(0, 3).map((post) => (
-                    <div key={post.id} className="community-recent-post-card">
-                      <span className={`community-badge ${post.type === 'problem' ? 'problem' : 'chat'}`}>
-                        {post.type === 'problem' ? '문제 공유' : '자유 채팅'}
-                      </span>
-                      <p>{post.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="community-profile-modal-action-row">
-              {selectedFriendProfile.canChat ? (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    setChatTarget({
-                      id: selectedFriendProfile.profile.id,
-                      name: selectedFriendProfile.profile.name,
-                      avatar: selectedFriendProfile.profile.avatar,
-                      photoUrl: selectedFriendProfile.profile.photoUrl,
-                    });
-                    setChatOpen(true);
-                  }}
-                >
-                  1대1채팅하기
-                </button>
-              ) : (
-                <span className="status-chip">채팅 불가</span>
-              )}
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <FriendProfileWindow
+        open={Boolean(selectedFriendProfile)}
+        profile={selectedFriendProfile}
+        onClose={() => setSelectedFriendProfile(null)}
+        onStartChat={() => {
+          if (!selectedFriendProfile) return;
+          setChatTarget({
+            id: selectedFriendProfile.profile.id,
+            name: selectedFriendProfile.profile.name,
+            avatar: selectedFriendProfile.profile.avatar,
+            photoUrl: selectedFriendProfile.profile.photoUrl,
+          });
+          setChatOpen(true);
+        }}
+      />
 
       <DirectChatModal
         open={chatOpen}
