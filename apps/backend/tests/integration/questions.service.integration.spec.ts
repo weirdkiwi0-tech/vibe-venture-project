@@ -340,4 +340,68 @@ describe('QuestionsService + Repository (integration)', () => {
     expect(found.question.id).toBe(created.id);
     expect(authService.getUserById).toHaveBeenCalledWith('admin-1');
   });
+
+  it('hides reported question for reporter across top/all/detail, but keeps it for admin and anonymous-user', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const reportsService = new ReportsService(
+      new InMemoryReportRepository(),
+      new InMemoryAdminAuditLogRepository(),
+    );
+    const authService = {
+      getUserById: jest.fn((userId: string) => {
+        if (userId === 'admin-1') {
+          return { id: 'admin-1', role: 'admin' };
+        }
+
+        if (userId === 'reporter-1') {
+          return { id: 'reporter-1', role: 'user' };
+        }
+
+        if (userId === 'author-1') {
+          return { id: 'author-1', role: 'user' };
+        }
+
+        return undefined;
+      }),
+    };
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo, authService as never, reportsService);
+
+    const created = await service.create({
+      title: 'integration report-hide target',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    }, 'author-1');
+
+    await reportsService.create({
+      targetType: 'question',
+      targetId: created.id,
+      reason: 'hide for reporter',
+    }, 'reporter-1');
+
+    const reporterTop = await service.listTopQuestions(undefined, undefined, 'reporter-1');
+    const reporterAll = await service.listAllQuestions(undefined, 'reporter-1');
+
+    expect(reporterTop.some((item) => item.question.id === created.id)).toBe(false);
+    expect(reporterAll.some((item) => item.question.id === created.id)).toBe(false);
+    await expect(service.findById(created.id, 'reporter-1')).rejects.toThrow('question not found');
+
+    const adminTop = await service.listTopQuestions(undefined, undefined, 'admin-1');
+    const adminAll = await service.listAllQuestions(undefined, 'admin-1');
+    const adminDetail = await service.findById(created.id, 'admin-1');
+
+    expect(adminTop.some((item) => item.question.id === created.id)).toBe(true);
+    expect(adminAll.some((item) => item.question.id === created.id)).toBe(true);
+    expect(adminDetail.question.id).toBe(created.id);
+
+    const anonymousTop = await service.listTopQuestions(undefined, undefined, 'anonymous-user');
+    const anonymousAll = await service.listAllQuestions(undefined, 'anonymous-user');
+    const anonymousDetail = await service.findById(created.id, 'anonymous-user');
+
+    expect(anonymousTop.some((item) => item.question.id === created.id)).toBe(true);
+    expect(anonymousAll.some((item) => item.question.id === created.id)).toBe(true);
+    expect(anonymousDetail.question.id).toBe(created.id);
+  });
 });

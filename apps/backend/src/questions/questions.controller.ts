@@ -34,7 +34,7 @@ export class QuestionsController {
     }
 
     const headerUser = await this.authService.getUserById(headerUserId);
-    return headerUser?.id;
+    return headerUser?.id ?? headerUserId;
   }
 
   private mapQuestionItem({ question, answerCount }: QuestionWithAnswerCount) {

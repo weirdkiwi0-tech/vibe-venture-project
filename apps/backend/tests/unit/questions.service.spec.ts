@@ -6,6 +6,9 @@ import { AuthService } from '../../src/auth';
 import { AnswerEntity } from '../../src/questions/entities/answer.entity';
 import { QuestionsService } from '../../src/questions/questions.service';
 import { QuestionEntity } from '../../src/questions/entities/question.entity';
+import { ReportsService } from '../../src/reports/reports.service';
+import { InMemoryReportRepository } from '../../src/reports/in-memory-report.repository';
+import { InMemoryAdminAuditLogRepository } from '../../src/reports/in-memory-admin-audit-log.repository';
 import { seedTopPolicyQuestions } from '../support/top-policy-fixture';
 
 describe('QuestionsService (unit)', () => {
@@ -444,5 +447,76 @@ describe('QuestionsService (unit)', () => {
 
     const viewed = await localService.findById(created.id, 'registered-user');
     expect(viewed.question.viewCount).toBe(1);
+  });
+
+  it('hides reported question for reporter across top/all/detail, but not for admin and anonymous-user', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const localAnswerRepo = new InMemoryAnswerRepository();
+    const localQuestionLikeRepo = new InMemoryQuestionLikeRepository();
+    const reportsService = new ReportsService(
+      new InMemoryReportRepository(),
+      new InMemoryAdminAuditLogRepository(),
+    );
+    const authService = {
+      getUserById: jest.fn((userId: string) => {
+        if (userId === 'admin-1') {
+          return { id: 'admin-1', role: 'admin' };
+        }
+
+        if (userId === 'reporter-1') {
+          return { id: 'reporter-1', role: 'user' };
+        }
+
+        if (userId === 'author-1') {
+          return { id: 'author-1', role: 'user' };
+        }
+
+        return undefined;
+      }),
+    };
+
+    const localService = new QuestionsService(
+      repo,
+      localAnswerRepo,
+      localQuestionLikeRepo,
+      authService as unknown as AuthService,
+      reportsService,
+    );
+
+    const created = await localService.create({
+      title: 'report-hide-unit-target',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    }, 'author-1');
+
+    await reportsService.create({
+      targetType: 'question',
+      targetId: created.id,
+      reason: 'hide for reporter',
+    }, 'reporter-1');
+
+    const reporterTop = await localService.listTopQuestions(undefined, undefined, 'reporter-1');
+    const reporterAll = await localService.listAllQuestions(undefined, 'reporter-1');
+
+    expect(reporterTop.some((item) => item.question.id === created.id)).toBe(false);
+    expect(reporterAll.some((item) => item.question.id === created.id)).toBe(false);
+    await expect(localService.findById(created.id, 'reporter-1')).rejects.toThrow(NotFoundException);
+
+    const adminTop = await localService.listTopQuestions(undefined, undefined, 'admin-1');
+    const adminAll = await localService.listAllQuestions(undefined, 'admin-1');
+    const adminDetail = await localService.findById(created.id, 'admin-1');
+
+    expect(adminTop.some((item) => item.question.id === created.id)).toBe(true);
+    expect(adminAll.some((item) => item.question.id === created.id)).toBe(true);
+    expect(adminDetail.question.id).toBe(created.id);
+
+    const anonymousTop = await localService.listTopQuestions(undefined, undefined, 'anonymous-user');
+    const anonymousAll = await localService.listAllQuestions(undefined, 'anonymous-user');
+    const anonymousDetail = await localService.findById(created.id, 'anonymous-user');
+
+    expect(anonymousTop.some((item) => item.question.id === created.id)).toBe(true);
+    expect(anonymousAll.some((item) => item.question.id === created.id)).toBe(true);
+    expect(anonymousDetail.question.id).toBe(created.id);
   });
 });

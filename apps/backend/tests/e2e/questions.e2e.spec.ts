@@ -711,6 +711,93 @@ describe('Questions API (e2e)', () => {
     expect(anotherList.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
   });
 
+  it('applies report-hide contract across /questions, /questions/all, /questions/:id with admin and anonymous exceptions', async () => {
+    const created = await request(app.getHttpServer()).post('/questions').send({
+      title: 'report-hide-contract-target',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+    });
+    expect(created.status).toBe(201);
+
+    const reporterHeaderId = `reporter-header-${Date.now()}`;
+    const reportRes = await request(app.getHttpServer())
+      .post('/reports')
+      .set('x-user-id', reporterHeaderId)
+      .send({
+        targetType: 'question',
+        targetId: created.body.id,
+        reason: 'hide in all question views',
+        details: 'contract lock',
+        severity: 'normal',
+      });
+    expect(reportRes.status).toBe(201);
+
+    const reporterTop = await request(app.getHttpServer())
+      .get('/questions')
+      .set('x-user-id', reporterHeaderId);
+    const reporterAll = await request(app.getHttpServer())
+      .get('/questions/all')
+      .set('x-user-id', reporterHeaderId);
+    const reporterDetail = await request(app.getHttpServer())
+      .get(`/questions/${created.body.id}`)
+      .set('x-user-id', reporterHeaderId);
+
+    expect(reporterTop.status).toBe(200);
+    expect(reporterAll.status).toBe(200);
+    expect(reporterDetail.status).toBe(404);
+    expect(reporterTop.body.some((item: { id: string }) => item.id === created.body.id)).toBe(false);
+    expect(reporterAll.body.some((item: { id: string }) => item.id === created.body.id)).toBe(false);
+
+    process.env.GOOGLE_ADMIN_EMAILS = 'questions-hide-admin@example.com';
+    const adminIdentity = await authService.signInWithGoogle({
+      googleId: `google-hide-admin-${Date.now()}`,
+      email: 'questions-hide-admin@example.com',
+      displayName: 'Questions Hide Admin',
+    });
+    const adminSession = await authService.createSession(adminIdentity.user.id);
+
+    const adminReportRes = await request(app.getHttpServer())
+      .post('/reports')
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({
+        targetType: 'question',
+        targetId: created.body.id,
+        reason: 'admin moderation review',
+        details: 'should stay visible for admin',
+        severity: 'normal',
+      });
+    expect(adminReportRes.status).toBe(201);
+
+    const adminTop = await request(app.getHttpServer())
+      .get('/questions')
+      .set('Cookie', [`keepit-session=${adminSession}`]);
+    const adminAll = await request(app.getHttpServer())
+      .get('/questions/all')
+      .set('Cookie', [`keepit-session=${adminSession}`]);
+    const adminDetail = await request(app.getHttpServer())
+      .get(`/questions/${created.body.id}`)
+      .set('Cookie', [`keepit-session=${adminSession}`]);
+
+    expect(adminTop.status).toBe(200);
+    expect(adminAll.status).toBe(200);
+    expect(adminDetail.status).toBe(200);
+    expect(adminTop.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
+    expect(adminAll.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
+    expect(adminDetail.body.id).toBe(created.body.id);
+
+    const anonymousTop = await request(app.getHttpServer()).get('/questions');
+    const anonymousAll = await request(app.getHttpServer()).get('/questions/all');
+    const anonymousDetail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+
+    expect(anonymousTop.status).toBe(200);
+    expect(anonymousAll.status).toBe(200);
+    expect(anonymousDetail.status).toBe(200);
+    expect(anonymousTop.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
+    expect(anonymousAll.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
+    expect(anonymousDetail.body.id).toBe(created.body.id);
+  });
+
   it('GET /questions follows top policy as popular 7 plus help-needed 3', async () => {
     const likeCounts = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0];
     const createdQuestions: Array<{ id: string; title: string }> = [];
