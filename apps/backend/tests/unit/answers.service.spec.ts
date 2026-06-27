@@ -4,6 +4,7 @@ import { InMemoryQuestionRepository } from '../../src/questions/in-memory-questi
 import { AnswersService } from '../../src/questions/answers.service';
 import { AnswerEntity } from '../../src/questions/entities/answer.entity';
 import { QuestionEntity } from '../../src/questions/entities/question.entity';
+import { AuthService } from '../../src/auth';
 
 describe('AnswersService (unit)', () => {
   it('creates answer for existing question', async () => {
@@ -125,5 +126,56 @@ describe('AnswersService (unit)', () => {
     const service = new AnswersService(answerRepo, questionRepo);
 
     await expect(service.findByQuestionId('missing-question')).rejects.toThrow(NotFoundException);
+  });
+
+  it('createComment anonymous 모드: authorName 익명, authorAvatar 익', async () => {
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionRepo = new InMemoryQuestionRepository();
+    const service = new AnswersService(answerRepo, questionRepo);
+
+    const question = QuestionEntity.create({ id: 'q-anon', authorId: 'u-1', title: 'title', body: 'body', subject: 'MATH', grade: '1' });
+    await questionRepo.save(question);
+    const answer = await service.create('q-anon', { type: 'text', content: 'answer' }, 'u-1');
+
+    const comment = await service.createComment(answer.id, { content: '익명 댓글', authorVisibility: 'anonymous' }, 'user-2');
+
+    expect(comment.authorName).toBe('익명');
+    expect(comment.authorAvatar).toBe('익');
+    expect(comment.authorPhotoUrl).toBeUndefined();
+  });
+
+  it('createComment public 모드: AuthService displayName 조회 결과를 authorName에 반영', async () => {
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionRepo = new InMemoryQuestionRepository();
+    const authServiceMock = {
+      getUserById: jest.fn().mockResolvedValue({ id: 'u-3', displayName: '답변댓글작성자', photoUrl: '/p.png' }),
+    } as unknown as AuthService;
+    const service = new AnswersService(answerRepo, questionRepo, authServiceMock);
+
+    const question = QuestionEntity.create({ id: 'q-pub', authorId: 'u-1', title: 'title', body: 'body', subject: 'MATH', grade: '1' });
+    await questionRepo.save(question);
+    const answer = await service.create('q-pub', { type: 'text', content: 'answer' }, 'u-1');
+
+    const comment = await service.createComment(answer.id, { content: '공개 댓글', authorVisibility: 'public' }, 'u-3');
+
+    expect(comment.authorName).toBe('답변댓글작성자');
+    expect(comment.authorAvatar).toBe('답');
+  });
+
+  it('createComment public 모드: authorAvatar가 string 타입', async () => {
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionRepo = new InMemoryQuestionRepository();
+    const authServiceMock = {
+      getUserById: jest.fn().mockResolvedValue({ id: 'u-4', displayName: '아바타테스터', photoUrl: '/avatar.png' }),
+    } as unknown as AuthService;
+    const service = new AnswersService(answerRepo, questionRepo, authServiceMock);
+
+    const question = QuestionEntity.create({ id: 'q-avatar', authorId: 'u-1', title: 'title', body: 'body', subject: 'MATH', grade: '1' });
+    await questionRepo.save(question);
+    const answer = await service.create('q-avatar', { type: 'text', content: 'answer' }, 'u-1');
+
+    const comment = await service.createComment(answer.id, { content: '아바타 확인', authorVisibility: 'public' }, 'u-4');
+
+    expect(typeof comment.authorAvatar).toBe('string');
   });
 });

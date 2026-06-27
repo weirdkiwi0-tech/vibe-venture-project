@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from '../auth';
 import { CreateVideoCommentDto } from './dto/create-video-comment.dto';
@@ -101,6 +101,9 @@ export class VideosController {
   @Get(':id')
   async findById(@Param('id') id: string) {
     const video = await this.videosService.findById(id);
+    const uploaderUser = await this.authService.getUserById(video.uploaderId).catch(() => undefined);
+    const uploaderName = uploaderUser?.displayName ?? '알 수 없음';
+    const uploaderAvatar = uploaderName.trim() ? uploaderName.trim().slice(0, 1).toUpperCase() : 'U';
     return {
       id: video.id,
       title: video.title,
@@ -110,10 +113,15 @@ export class VideosController {
       likeCount: video.likeCount,
       viewCount: video.viewCount,
       createdAt: video.createdAt.toISOString(),
+      uploaderId: video.uploaderId,
+      uploaderName,
+      uploaderAvatar,
+      uploaderPhotoUrl: uploaderUser?.photoUrl,
     };
   }
 
   @Post(':id/like')
+  @HttpCode(200)
   async likeVideo(@Param('id') id: string, @Headers('x-user-id') userId?: string) {
     const result = await this.videosService.like(id, userId ?? 'anonymous-user');
     return {
@@ -125,6 +133,7 @@ export class VideosController {
   }
 
   @Post(':id/view')
+  @HttpCode(200)
   async viewVideo(
     @Param('id') id: string,
     @Req() req: Request,

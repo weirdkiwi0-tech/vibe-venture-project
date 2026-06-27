@@ -1,10 +1,13 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { AuthService } from '../../src/auth';
 
 describe('Videos API (e2e)', () => {
   let app: INestApplication;
+  let authService: AuthService;
 
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -12,6 +15,7 @@ describe('Videos API (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -20,6 +24,7 @@ describe('Videos API (e2e)', () => {
       }),
     );
     await app.init();
+    authService = moduleRef.get(AuthService);
   });
 
   afterAll(async () => {
@@ -189,5 +194,126 @@ describe('Videos API (e2e)', () => {
     expect(report.status).toBe(201);
     expect(report.body.targetType).toBe('video');
     expect(report.body.targetId).toBe(created.body.id);
+  });
+
+  it('GET /videos/:id 응답에 uploaderId, uploaderName 필드 존재 및 non-null', async () => {
+    const { user } = await authService.signUpLocal({
+      email: `uploader-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '업로더닉네임',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const created = await request(app.getHttpServer())
+      .post('/videos')
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ title: '업로더테스트', url: 'https://stream.test/uploader', durationSeconds: 60 });
+    expect(created.status).toBe(201);
+
+    const detail = await request(app.getHttpServer()).get(`/videos/${created.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.uploaderId).toBeDefined();
+    expect(detail.body.uploaderName).toBeDefined();
+    expect(detail.body.uploaderId).not.toBeNull();
+    expect(detail.body.uploaderName).not.toBeNull();
+  });
+
+  it('업로드한 유저의 displayName이 uploaderName에 반영된다', async () => {
+    const { user } = await authService.signUpLocal({
+      email: `displayname-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '실제닉네임테스터',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const created = await request(app.getHttpServer())
+      .post('/videos')
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ title: '닉네임확인', url: 'https://stream.test/displayname', durationSeconds: 90 });
+    expect(created.status).toBe(201);
+
+    const detail = await request(app.getHttpServer()).get(`/videos/${created.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.uploaderId).toBe(user.id);
+    expect(detail.body.uploaderName).toBe('실제닉네임테스터');
+  });
+
+  it('비디오 댓글에 authorName, authorAvatar 필드 존재', async () => {
+    const { user } = await authService.signUpLocal({
+      email: `videocomment-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '댓글닉네임',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const created = await request(app.getHttpServer())
+      .post('/videos')
+      .send({ title: '댓글테스트', url: 'https://stream.test/comment-check', durationSeconds: 120 });
+
+    await request(app.getHttpServer())
+      .post(`/videos/${created.body.id}/comments`)
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ content: '댓글 내용', authorVisibility: 'nickname' });
+
+    const comments = await request(app.getHttpServer()).get(`/videos/${created.body.id}/comments`);
+    expect(comments.status).toBe(200);
+    expect(comments.body.length).toBeGreaterThan(0);
+    expect(comments.body[0].authorName).toBeDefined();
+    expect(comments.body[0].authorAvatar).toBeDefined();
+  });
+
+  it('POST /videos/:id/like → 200, liked: true, likeCount 증가', async () => {
+    const created = await request(app.getHttpServer()).post('/videos').send({
+      title: 'like test video',
+      url: 'https://stream.test/like-test',
+      durationSeconds: 100,
+    });
+    expect(created.status).toBe(201);
+
+    const liked = await request(app.getHttpServer())
+      .post(`/videos/${created.body.id}/like`)
+      .set('x-user-id', 'like-user-1');
+
+    expect(liked.status).toBe(200);
+    expect(liked.body.liked).toBe(true);
+    expect(liked.body.likeCount).toBe(1);
+  });
+
+  it('POST /videos/:id/like 두 번 → liked: false (토글)', async () => {
+    const created = await request(app.getHttpServer()).post('/videos').send({
+      title: 'like toggle video',
+      url: 'https://stream.test/like-toggle',
+      durationSeconds: 100,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/videos/${created.body.id}/like`)
+      .set('x-user-id', 'toggle-user-1');
+
+    const unliked = await request(app.getHttpServer())
+      .post(`/videos/${created.body.id}/like`)
+      .set('x-user-id', 'toggle-user-1');
+
+    expect(unliked.status).toBe(200);
+    expect(unliked.body.liked).toBe(false);
+    expect(unliked.body.likeCount).toBe(0);
+  });
+
+  it('POST /videos/:id/view → 200, viewCount 존재', async () => {
+    const created = await request(app.getHttpServer()).post('/videos').send({
+      title: 'view test video',
+      url: 'https://stream.test/view-test',
+      durationSeconds: 100,
+    });
+
+    const viewed = await request(app.getHttpServer())
+      .post(`/videos/${created.body.id}/view`)
+      .set('x-user-id', 'view-user-1');
+
+    expect(viewed.status).toBe(200);
+    expect(viewed.body.viewCount).toBeDefined();
   });
 });

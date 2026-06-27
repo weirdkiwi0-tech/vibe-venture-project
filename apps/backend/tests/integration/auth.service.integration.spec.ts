@@ -61,4 +61,57 @@ describe('AuthService (integration)', () => {
     expect(user?.email).toBe('user@example.com');
     expect(user?.role).toBe('user');
   });
+
+  it('signInLocal 밴 상태 유저 → UnauthorizedException, 언밴 후 → 성공', async () => {
+    const service = new AuthService();
+
+    await service.signUpLocal({
+      email: 'banflow@test.com',
+      password: 'Secure@99',
+      displayName: '밴테스트',
+    });
+
+    // 유저 ID 획득
+    const users = await service.listUsers();
+    const found = users.find((u) => u.email === 'banflow@test.com');
+    expect(found).toBeDefined();
+
+    const banUntil = new Date(Date.now() + 3600 * 1000).toISOString();
+    await service.banUser(found!.id, banUntil);
+
+    // 밴 상태 로그인 시도 → 실패
+    await expect(service.signInLocal('banflow@test.com', 'Secure@99')).rejects.toThrow();
+
+    // 언밴 후 로그인 성공
+    await service.unbanUser(found!.id);
+    const loggedIn = await service.signInLocal('banflow@test.com', 'Secure@99');
+    expect(loggedIn.email).toBe('banflow@test.com');
+  });
+
+  it('밴된 계정 signInLocal → UnauthorizedException 메시지에 밴 만료 시각 포함', async () => {
+    const service = new AuthService();
+
+    await service.signUpLocal({
+      email: 'banmsg@test.com',
+      password: 'Secure@99',
+      displayName: '밴메시지테스트',
+    });
+
+    const users = await service.listUsers();
+    const found = users.find((u) => u.email === 'banmsg@test.com');
+    expect(found).toBeDefined();
+
+    const banUntil = new Date(Date.now() + 7200 * 1000).toISOString();
+    await service.banUser(found!.id, banUntil);
+
+    let caughtError: Error | undefined;
+    try {
+      await service.signInLocal('banmsg@test.com', 'Secure@99');
+    } catch (e) {
+      caughtError = e as Error;
+    }
+
+    expect(caughtError).toBeDefined();
+    expect(caughtError!.message).toMatch(/ban|정지|계정/i);
+  });
 });

@@ -260,8 +260,19 @@ export default function VideoDetailPage() {
 
         {!loading && !error && video ? (
           <article className="surface-card" style={{ padding: '1rem' }}>
-            <div className="card-meta">
-              {video.subject} · {formatDuration(video.durationSeconds)} · {new Date(video.createdAt).toLocaleDateString('ko-KR')}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              {video.uploaderId && video.uploaderName && video.uploaderName !== '익명' ? (
+                <CommunityProfileModal
+                  userId={video.uploaderId}
+                  viewerId={authUser?.id}
+                  displayName={video.uploaderName}
+                  avatar={video.uploaderAvatar ?? video.uploaderName.slice(0, 1).toUpperCase()}
+                  photoUrl={video.uploaderPhotoUrl}
+                />
+              ) : null}
+              <div className="card-meta" style={{ marginLeft: 'auto' }}>
+                {video.subject} · {formatDuration(video.durationSeconds)} · {new Date(video.createdAt).toLocaleDateString('ko-KR')}
+              </div>
             </div>
             <h3 style={{ marginTop: '0.35rem', marginBottom: '0.6rem' }}>{video.title}</h3>
             <video

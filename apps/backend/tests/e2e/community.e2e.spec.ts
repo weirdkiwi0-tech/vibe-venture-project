@@ -4,27 +4,22 @@ import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { createSignedUpUser } from '../support/e2e-helpers';
+import { TEST_PASSWORD } from '../support/test-constants';
 
 describe('Community API (e2e)', () => {
   let app: INestApplication;
-  const testPassword = 'Password123!';
 
+  /**
+   * Wrapper around createSignedUpUser that uses community email pattern
+   */
   const signUpUser = async (emailPrefix: string, displayName: string) => {
     const email = `${emailPrefix}-${randomUUID()}@example.com`;
-    const signUp = await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email,
-        password: testPassword,
-        displayName,
-      });
-
-    expect(signUp.status).toBe(201);
-
-    return {
-      id: signUp.body.user.id as string,
+    return createSignedUpUser(app, {
       email,
-    };
+      password: TEST_PASSWORD,
+      displayName,
+    });
   };
 
   const createFriendRequest = async (requesterId: string, targetId: string) => {
@@ -170,8 +165,8 @@ describe('Community API (e2e)', () => {
   });
 
   it('수락/거절이 완료된 친구 요청은 재처리할 수 없다', async () => {
-    const acceptRequester = await signUpUser('community-terminal-accept-requester', '완료요청자A');
-    const acceptTarget = await signUpUser('community-terminal-accept-target', '완료대상자A');
+    const acceptRequester = await signUpUser('ct-accept-requester', '완료요청자A');
+    const acceptTarget = await signUpUser('ct-accept-target', '완료대상자A');
 
     const acceptedRequest = await createFriendRequest(acceptRequester.id, acceptTarget.id);
     await acceptFriendRequest(acceptedRequest.body.id as string, acceptTarget.id);
@@ -183,8 +178,8 @@ describe('Community API (e2e)', () => {
 
     expect(rejectAfterAccept.status).toBe(400);
 
-    const rejectRequester = await signUpUser('community-terminal-reject-requester', '완료요청자B');
-    const rejectTarget = await signUpUser('community-terminal-reject-target', '완료대상자B');
+    const rejectRequester = await signUpUser('ct-reject-requester', '완료요청자B');
+    const rejectTarget = await signUpUser('ct-reject-target', '완료대상자B');
 
     const rejectedRequest = await createFriendRequest(rejectRequester.id, rejectTarget.id);
     await rejectFriendRequest(rejectedRequest.body.id as string, rejectTarget.id);
@@ -316,5 +311,136 @@ describe('Community API (e2e)', () => {
       .send({ recipientId: 'some-user-id', content: '인증 없음' });
 
     expect(directMessageWithoutAuth.status).toBe(401);
+  });
+
+  describe('커뮤니티 게시글 CRUD', () => {
+    it('POST /community/posts → 201', async () => {
+      const user = await signUpUser('crud-post-author', '게시글작성자');
+
+      const res = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: 'CRUD 테스트 게시글', content: '게시글 내용입니다.' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBeDefined();
+    });
+
+    it('GET /community → 200, posts 배열 포함', async () => {
+      const user = await signUpUser('crud-board-author', '보드확인자');
+
+      await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '보드 확인 게시글', content: '내용' });
+
+      const res = await request(app.getHttpServer())
+        .get('/community')
+        .set('x-user-id', user.id);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.posts)).toBe(true);
+    });
+
+    it('GET /community/posts/:id → 200', async () => {
+      const user = await signUpUser('crud-detail-author', '상세확인자');
+
+      const created = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '상세 조회 게시글', content: '내용' });
+      expect(created.status).toBe(201);
+
+      const detail = await request(app.getHttpServer())
+        .get(`/community/posts/${encodeURIComponent(created.body.id)}`);
+
+      expect(detail.status).toBe(200);
+      expect(detail.body.id).toBe(created.body.id);
+    });
+
+    it('POST /community/posts/:id/comments → 201', async () => {
+      const user = await signUpUser('crud-comment-author', '댓글작성자');
+
+      const post = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '댓글 테스트 게시글', content: '내용' });
+      expect(post.status).toBe(201);
+
+      const comment = await request(app.getHttpServer())
+        .post(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
+        .set('x-user-id', user.id)
+        .send({ content: '테스트 댓글', authorVisibility: 'nickname' });
+
+      expect(comment.status).toBe(201);
+      expect(comment.body.id).toBeDefined();
+    });
+
+    it('GET /community/posts/:id/comments → 200', async () => {
+      const user = await signUpUser('crud-comment-list', '댓글목록자');
+
+      const post = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '댓글 목록 게시글', content: '내용' });
+
+      await request(app.getHttpServer())
+        .post(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
+        .set('x-user-id', user.id)
+        .send({ content: '목록 확인 댓글', authorVisibility: 'nickname' });
+
+      const comments = await request(app.getHttpServer())
+        .get(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
+        .set('x-user-id', user.id);
+
+      expect(comments.status).toBe(200);
+      expect(Array.isArray(comments.body)).toBe(true);
+      expect(comments.body.length).toBeGreaterThan(0);
+    });
+
+    it('POST /community/posts/:id/like → 200, likeCount 포함', async () => {
+      const user = await signUpUser('crud-like-author', '좋아요작성자');
+      const liker = await signUpUser('crud-like-user', '좋아요누른자');
+
+      const post = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '좋아요 테스트 게시글', content: '내용' });
+      expect(post.status).toBe(201);
+
+      const liked = await request(app.getHttpServer())
+        .post(`/community/posts/${encodeURIComponent(post.body.id)}/like`)
+        .set('x-user-id', liker.id);
+
+      expect(liked.status).toBe(200);
+      expect(liked.body.likeCount).toBeDefined();
+    });
+
+    it('닉네임 게시글 authorVisibility=nickname → authorName 존재', async () => {
+      const user = await signUpUser('crud-nick-author', '닉네임작성자');
+
+      const post = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '닉네임 게시글', content: '내용', authorVisibility: 'nickname' });
+      expect(post.status).toBe(201);
+
+      expect(post.body.authorVisibility).toBe('nickname');
+      expect(post.body.authorName).toBeDefined();
+      expect(post.body.authorName).not.toBe('');
+    });
+
+    it('익명 게시글 authorVisibility=anonymous → authorName=익명', async () => {
+      const user = await signUpUser('crud-anon-author', '익명게시글작성자');
+
+      const post = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', user.id)
+        .send({ title: '익명 게시글', content: '내용', authorVisibility: 'anonymous' });
+      expect(post.status).toBe(201);
+
+      expect(post.body.authorVisibility).toBe('anonymous');
+      expect(post.body.authorName).toBe('익명');
+    });
   });
 });

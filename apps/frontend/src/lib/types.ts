@@ -18,6 +18,10 @@ export interface VideoItem {
   likeCount: number;
   viewCount: number;
   createdAt: string;
+  uploaderId?: string;
+  uploaderName?: string;
+  uploaderAvatar?: string;
+  uploaderPhotoUrl?: string;
 }
 
 export interface HomeQuestionItem {
@@ -176,6 +180,9 @@ export interface CommunityMailboxResponse {
 export interface QuestionItem {
   id: string;
   authorId: string;
+  authorName?: string;
+  authorAvatar?: string;
+  authorPhotoUrl?: string;
   title: string;
   body: string;
   subject: string;
@@ -214,6 +221,9 @@ export interface MyAnswerItem {
 export interface QuestionAnswerItem {
   id: string;
   authorId: string;
+  authorName?: string;
+  authorAvatar?: string;
+  authorPhotoUrl?: string;
   questionId: string;
   type: 'text' | 'video';
   content: string;
@@ -229,6 +239,8 @@ export interface QuestionAnswerCommentItem {
   authorId: string;
   authorVisibility: 'public' | 'anonymous';
   authorName: string;
+  authorAvatar?: string;
+  authorPhotoUrl?: string;
   content: string;
   attachments: string[];
   parentCommentId: string | null;

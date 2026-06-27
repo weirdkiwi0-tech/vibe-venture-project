@@ -164,4 +164,44 @@ describe('VideosService (unit)', () => {
     const viewed = await localService.incrementView(created.id, 'registered-user');
     expect(viewed.viewCount).toBe(1);
   });
+
+  it('createComment - nickname 모드: AuthService.getUserById displayName을 authorName에 반영', async () => {
+    const authServiceMock = {
+      getUserById: jest.fn().mockResolvedValue({ id: 'user-1', displayName: '댓글작성자', photoUrl: '/a.png' }),
+    } as unknown as AuthService;
+    const localService = new VideosService(repo, authServiceMock);
+
+    const video = await localService.create({
+      title: 'comment video',
+      url: 'https://stream.test/comment-video',
+      durationSeconds: 180,
+    });
+
+    const comment = await localService.createComment(
+      video.id,
+      { content: '테스트 댓글', authorVisibility: 'nickname' },
+      'user-1',
+    );
+
+    expect(comment.authorName).toBe('댓글작성자');
+    expect(comment.authorAvatar).toBe('댓');
+  });
+
+  it('createComment - anonymous 모드: authorName 익명, authorAvatar 익', async () => {
+    const video = await service.create({
+      title: 'anon comment video',
+      url: 'https://stream.test/anon-comment',
+      durationSeconds: 180,
+    });
+
+    const comment = await service.createComment(
+      video.id,
+      { content: '익명 댓글', authorVisibility: 'anonymous' },
+      'any-user',
+    );
+
+    expect(comment.authorName).toBe('익명');
+    expect(comment.authorAvatar).toBe('익');
+    expect(comment.authorPhotoUrl).toBeUndefined();
+  });
 });

@@ -7,6 +7,8 @@ import { createAnswerComment, deleteAnswer, deleteQuestion, likeAnswer, likeAnsw
 import { createReportLink } from '../lib/report-links';
 import type { QuestionAnswerCommentItem, QuestionAnswerItem, QuestionItem } from '../lib/types';
 import { useAuthUser } from './role-provider';
+import { CommunityProfileModal } from './community-profile-modal';
+import { AnonymousProfileBadge } from './anonymous-profile-badge';
 
 async function toAttachmentValue(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -59,8 +61,21 @@ export function QuestionDetailCard({ question }: { question: QuestionItem }) {
 
   return (
     <div className="surface-card">
-      <div className="card-meta">
-        {question.subject} · 고{question.grade} · {question.status}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        {question.visibility === 'anonymous' ? (
+          <AnonymousProfileBadge ariaLabel="익명 질문 작성자" />
+        ) : question.authorId && question.authorName ? (
+          <CommunityProfileModal
+            userId={question.authorId}
+            viewerId={authUser?.id}
+            displayName={question.authorName}
+            avatar={question.authorAvatar ?? question.authorName.slice(0, 1).toUpperCase()}
+            photoUrl={question.authorPhotoUrl}
+          />
+        ) : null}
+        <div className="card-meta" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+          {question.subject} · 고{question.grade} · {question.status}
+        </div>
       </div>
       <p>{question.body}</p>
       {question.attachments.length > 0 ? (
@@ -295,7 +310,21 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     return comments.map((comment) => (
       <div key={comment.id} className={depth > 0 ? 'reply-thread-nested' : 'reply-thread-root'}>
         <div className="surface-card reply-thread-card" style={{ padding: '0.6rem 0.8rem' }}>
-          <div className="card-meta">{comment.authorName} · {new Date(comment.createdAt).toLocaleString('ko-KR')}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center', marginBottom: '0.35rem' }}>
+            {comment.authorVisibility === 'anonymous' ? (
+              <AnonymousProfileBadge compact ariaLabel="익명 댓글 작성자" />
+            ) : (
+              <CommunityProfileModal
+                userId={comment.authorId}
+                viewerId={authUser?.id}
+                displayName={comment.authorName}
+                avatar={comment.authorAvatar ?? comment.authorName?.trim().slice(0, 1).toUpperCase() ?? 'U'}
+                photoUrl={comment.authorPhotoUrl}
+                compact
+              />
+            )}
+            <span className="card-meta" style={{ whiteSpace: 'nowrap' }}>{new Date(comment.createdAt).toLocaleString('ko-KR')}</span>
+          </div>
           <p style={{ margin: '0.35rem 0' }}>{comment.content}</p>
           {(comment.attachments ?? []).length > 0 ? (
             <div className="attachment-grid" style={{ marginTop: '0.45rem' }}>
@@ -417,7 +446,18 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     <div className="stack-list">
       {answers.map((answer) => (
         <article key={answer.id} id={`answer-${answer.id}`} className="surface-card">
-          <div className="card-meta">{answer.type}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            {answer.authorId && answer.authorName ? (
+              <CommunityProfileModal
+                userId={answer.authorId}
+                viewerId={authUser?.id}
+                displayName={answer.authorName}
+                avatar={answer.authorAvatar ?? answer.authorName.slice(0, 1).toUpperCase()}
+                photoUrl={answer.authorPhotoUrl}
+              />
+            ) : null}
+            <span className="card-meta" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{answer.type}</span>
+          </div>
           <p>{answer.content}</p>
           {(answer.attachments ?? []).length > 0 ? (
             <div className="attachment-grid">

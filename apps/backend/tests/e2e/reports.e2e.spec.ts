@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
+import { createAdminSession } from '../support/e2e-helpers';
 
 describe('Reports API (e2e)', () => {
   let app: INestApplication;
@@ -35,15 +36,16 @@ describe('Reports API (e2e)', () => {
     return answerRes.body.id as string;
   }
 
-  async function createAdminSession() {
-    process.env.GOOGLE_ADMIN_EMAILS = 'reports-admin@example.com';
-    const login = await authService.signInWithGoogle({
-      googleId: `reports-admin-${Date.now()}`,
+  /**
+   * Create admin session with reports-specific email
+   * Wraps common createAdminSession helper
+   */
+  async function createReportsAdminSession() {
+    return createAdminSession(authService, {
       email: 'reports-admin@example.com',
+      googleId: `reports-admin-${Date.now()}`,
       displayName: 'Reports Admin',
     });
-
-    return authService.createSession(login.user.id);
   }
 
   beforeAll(async () => {
@@ -109,7 +111,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('POST /reports/:id/approve -> 200 and GET /reports/audit-logs -> 200', async () => {
-    const adminSession = await createAdminSession();
+    const adminSession = await createReportsAdminSession();
     const answerId = await createAnswerTarget();
 
     const created = await request(app.getHttpServer()).post('/reports').send({
@@ -136,7 +138,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('GET /reports/queue -> 200', async () => {
-    const adminSession = await createAdminSession();
+    const adminSession = await createReportsAdminSession();
     const questionId = await createQuestionTarget();
 
     await request(app.getHttpServer()).post('/reports').send({
@@ -162,7 +164,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('accepts community-post/comment reports and includes them in admin overview buckets', async () => {
-    const adminSession = await createAdminSession();
+    const adminSession = await createReportsAdminSession();
 
     const communityReport = await request(app.getHttpServer()).post('/reports').send({
       targetType: 'community-post',
@@ -203,7 +205,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('fixes queue contract: pending/reviewing only, high before normal, oldest first, terminal states excluded', async () => {
-    const adminSession = await createAdminSession();
+    const adminSession = await createReportsAdminSession();
     const testTag = `queue-contract-${Date.now()}`;
 
     const highOlderTarget = await createQuestionTarget();
@@ -287,5 +289,70 @@ describe('Reports API (e2e)', () => {
       highNewer.body.id,
       normalOlder.body.id,
     ]);
+  });
+
+  it('POST /reports/:id/reject → 201, status: rejected', async () => {
+    const adminSession = await createReportsAdminSession();
+    const questionId = await createQuestionTarget();
+
+    const created = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: questionId,
+      reason: 'standalone reject test',
+    });
+    expect(created.status).toBe(201);
+
+    const rejected = await request(app.getHttpServer())
+      .post(`/reports/${created.body.id}/reject`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: '신고 거절 사유' });
+
+    expect(rejected.status).toBe(201);
+    expect(rejected.body.status).toBe('rejected');
+  });
+
+  it('POST /reports/:id/restore → 201, status: restored', async () => {
+    const adminSession = await createReportsAdminSession();
+    const questionId = await createQuestionTarget();
+
+    const created = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: questionId,
+      reason: 'standalone restore test',
+    });
+    expect(created.status).toBe(201);
+
+    const restored = await request(app.getHttpServer())
+      .post(`/reports/${created.body.id}/restore`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: '복원 사유' });
+
+    expect(restored.status).toBe(201);
+    expect(restored.body.status).toBe('restored');
+  });
+
+  it('reject 후 approve 전환 → status: resolved', async () => {
+    const adminSession = await createReportsAdminSession();
+    const questionId = await createQuestionTarget();
+
+    const created = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: questionId,
+      reason: 'reject then approve test',
+    });
+    expect(created.status).toBe(201);
+
+    await request(app.getHttpServer())
+      .post(`/reports/${created.body.id}/reject`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: '일단 거절' });
+
+    const approved = await request(app.getHttpServer())
+      .post(`/reports/${created.body.id}/approve`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: '재검토 후 승인' });
+
+    expect(approved.status).toBe(201);
+    expect(approved.body.status).toBe('resolved');
   });
 });

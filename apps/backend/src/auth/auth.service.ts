@@ -678,9 +678,11 @@ export class AuthService {
   private readonly storage: AuthStorage;
 
   constructor() {
-    const provider = (process.env.AUTH_STORAGE_PROVIDER ?? 'azure-table').trim().toLowerCase();
-    if (provider !== 'azure-table') {
-      throw new BadRequestException('AUTH_STORAGE_PROVIDER는 azure-table만 지원합니다.');
+    const provider = (process.env.AUTH_STORAGE_PROVIDER ?? 'auto').trim().toLowerCase();
+
+    if (provider === 'memory') {
+      this.storage = new InMemoryAuthStorage();
+      return;
     }
 
     if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
@@ -688,7 +690,9 @@ export class AuthService {
         this.storage = new InMemoryAuthStorage();
         return;
       }
-      throw new BadRequestException('AZURE_TABLES_CONNECTION_STRING이 필요합니다.');
+      // 로컬 개발: AZURE_TABLES_CONNECTION_STRING 없으면 InMemory 사용
+      this.storage = new InMemoryAuthStorage();
+      return;
     }
 
     this.storage = new AzureTableAuthStorage();

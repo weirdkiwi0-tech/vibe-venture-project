@@ -37,10 +37,41 @@ export class QuestionsController {
     return headerUser?.id ?? headerUserId;
   }
 
+  private async resolvePersonDisplay(userId: string) {
+    const user = await this.authService.getUserById(userId).catch(() => undefined);
+    const name = user?.displayName ?? '알 수 없음';
+    const avatar = name.trim() ? name.trim().slice(0, 1).toUpperCase() : 'U';
+    return { name, avatar, photoUrl: user?.photoUrl };
+  }
+
   private mapQuestionItem({ question, answerCount }: QuestionWithAnswerCount) {
     return {
       id: question.id,
       authorId: question.authorId,
+      title: question.title,
+      body: question.body,
+      subject: question.subject,
+      grade: question.grade,
+      attachments: question.attachments,
+      visibility: question.visibility,
+      status: question.status,
+      createdAt: question.createdAt.toISOString(),
+      updatedAt: question.updatedAt.toISOString(),
+      likeCount: question.likeCount,
+      viewCount: question.viewCount,
+      answerCount,
+    };
+  }
+
+  private async mapQuestionItemWithAuthor({ question, answerCount }: QuestionWithAnswerCount) {
+    const isAnonymous = question.visibility === 'anonymous';
+    const authorDisplay = isAnonymous ? null : await this.resolvePersonDisplay(question.authorId);
+    return {
+      id: question.id,
+      authorId: question.authorId,
+      authorName: isAnonymous ? '익명' : (authorDisplay?.name ?? '알 수 없음'),
+      authorAvatar: isAnonymous ? '익' : (authorDisplay?.avatar ?? 'U'),
+      authorPhotoUrl: isAnonymous ? undefined : authorDisplay?.photoUrl,
       title: question.title,
       body: question.body,
       subject: question.subject,
@@ -62,6 +93,8 @@ export class QuestionsController {
     authorId: string;
     authorVisibility: 'public' | 'anonymous';
     authorName: string;
+    authorAvatar: string;
+    authorPhotoUrl?: string;
     content: string;
     attachments: string[];
     parentCommentId: string | null;
@@ -75,6 +108,8 @@ export class QuestionsController {
       authorId: comment.authorVisibility === 'anonymous' ? 'anonymous' : comment.authorId,
       authorVisibility: comment.authorVisibility,
       authorName: comment.authorName,
+      authorAvatar: comment.authorAvatar ?? (comment.authorName?.trim().slice(0, 1).toUpperCase() || 'U'),
+      authorPhotoUrl: comment.authorPhotoUrl,
       content: comment.content,
       attachments: comment.attachments,
       parentCommentId: comment.parentCommentId,
@@ -84,10 +119,14 @@ export class QuestionsController {
     };
   }
 
-  private mapAnswerItem(answer: AnswerEntity, meta?: { likeCount?: number; comments?: AnswerCommentNode[] }) {
+  private async mapAnswerItemWithAuthor(answer: AnswerEntity, meta?: { likeCount?: number; comments?: AnswerCommentNode[] }) {
+    const authorDisplay = await this.resolvePersonDisplay(answer.authorId);
     return {
       id: answer.id,
       authorId: answer.authorId,
+      authorName: authorDisplay.name,
+      authorAvatar: authorDisplay.avatar,
+      authorPhotoUrl: authorDisplay.photoUrl,
       questionId: answer.questionId,
       type: answer.type,
       content: answer.content,
@@ -110,7 +149,7 @@ export class QuestionsController {
       grade: query.grade,
       title: query.title,
     }, viewerId);
-    return items.map((item) => this.mapQuestionItem(item));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
   }
 
   @Get('all')
@@ -125,19 +164,19 @@ export class QuestionsController {
       grade: query.grade,
       title: query.title,
     }, viewerId);
-    return items.map((item) => this.mapQuestionItem(item));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
   }
 
   @Get('mine')
   async listMyQuestions(@Headers('x-user-id') authorId?: string) {
     const items = await this.questionsService.listByAuthorId(authorId ?? 'anonymous-user');
-    return items.map((item) => this.mapQuestionItem(item));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
   }
 
   @Get('mine/answers')
   async listMyAnswers(@Headers('x-user-id') authorId?: string) {
     const answers = await this.answersService.findByAuthorId(authorId ?? 'anonymous-user');
-    return answers.map((answer) => this.mapAnswerItem(answer));
+    return Promise.all(answers.map((answer) => this.mapAnswerItemWithAuthor(answer)));
   }
 
   @Post()
@@ -165,7 +204,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader: string | undefined,
   ) {
     const viewerId = await this.resolveViewerId(req, userIdHeader);
-    return this.mapQuestionItem(await this.questionsService.findById(id, viewerId));
+    return this.mapQuestionItemWithAuthor(await this.questionsService.findById(id, viewerId));
   }
 
   @Patch(':id/solve')
@@ -175,7 +214,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader?: string,
   ) {
     const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
-    return this.mapQuestionItem(await this.questionsService.solve(id, requestUserId));
+    return this.mapQuestionItemWithAuthor(await this.questionsService.solve(id, requestUserId));
   }
 
   @Post(':id/like')
@@ -187,7 +226,7 @@ export class QuestionsController {
     }
 
     const { liked, ...questionItem } = await this.questionsService.like(id, user.id);
-    return { ...this.mapQuestionItem(questionItem), liked };
+    return { ...(await this.mapQuestionItemWithAuthor(questionItem)), liked };
   }
 
   @Post(':id/answers')
@@ -197,18 +236,18 @@ export class QuestionsController {
     @Headers('x-user-id') authorId?: string,
   ) {
     const answer = await this.answersService.create(id, body, authorId);
-    return this.mapAnswerItem(answer, { likeCount: 0, comments: [] });
+    return this.mapAnswerItemWithAuthor(answer, { likeCount: 0, comments: [] });
   }
 
   @Get(':id/answers')
   async listAnswers(@Param('id') id: string) {
     const answers = await this.answersService.findByQuestionIdWithMeta(id);
-    return answers.map((item: AnswerWithMeta) =>
-      this.mapAnswerItem(item.answer, {
+    return Promise.all(answers.map((item: AnswerWithMeta) =>
+      this.mapAnswerItemWithAuthor(item.answer, {
         likeCount: item.likeCount,
         comments: item.comments,
       }),
-    );
+    ));
   }
 
   @Post('answers/:answerId/like')

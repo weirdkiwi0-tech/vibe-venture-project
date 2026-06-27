@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Req, Res, UseGuards } from '@nestjs/common';
+import { IsEmail, IsOptional, IsString, MinLength, MaxLength, Matches } from 'class-validator';
 import type { Request, Response } from 'express';
 import { ROLE_COOKIE_NAME } from './auth.constants';
 import { AuthService } from './auth.service';
@@ -11,16 +12,33 @@ interface GoogleAuthUser {
   photoUrl?: string;
 }
 
-interface LocalSignUpDto {
-  email: string;
-  password: string;
-  displayName: string;
+class LocalSignUpDto {
+  @IsEmail({}, { message: '올바른 이메일 형식을 입력해주세요.' })
+  email!: string;
+
+  @IsString()
+  @MinLength(8, { message: '비밀번호는 최소 8자 이상이어야 합니다.' })
+  @Matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/, {
+    message: '비밀번호에 특수문자(!@#$%^&* 등)를 하나 이상 포함해야 합니다.',
+  })
+  password!: string;
+
+  @IsString()
+  @MinLength(2, { message: '닉네임은 최소 2자 이상이어야 합니다.' })
+  @MaxLength(16, { message: '닉네임은 최대 16자까지 입력할 수 있습니다.' })
+  displayName!: string;
+
+  @IsOptional()
+  @IsString()
   photoUrl?: string;
 }
 
-interface LocalSignInDto {
-  email: string;
-  password: string;
+class LocalSignInDto {
+  @IsEmail({}, { message: '올바른 이메일 형식을 입력해주세요.' })
+  email!: string;
+
+  @IsString()
+  password!: string;
 }
 
 interface AuthenticatedRequest extends Request {

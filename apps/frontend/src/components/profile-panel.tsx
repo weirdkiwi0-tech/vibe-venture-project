@@ -176,18 +176,40 @@ export function ProfilePanel() {
   }
 
   if (!authUser) {
+    const validateSignUp = () => {
+      if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        return '올바른 이메일 형식을 입력해주세요.';
+      }
+      if (!formData.displayName || formData.displayName.trim().length < 2) {
+        return '닉네임은 최소 2자 이상이어야 합니다.';
+      }
+      if (formData.displayName.trim().length > 16) {
+        return '닉네임은 최대 16자까지 입력할 수 있습니다.';
+      }
+      if (formData.password.length < 8) {
+        return '비밀번호는 최소 8자 이상이어야 합니다.';
+      }
+      if (!/[!@#$%^&*()\-_=+\[\]{};':"\\|,.<>\/?`~]/.test(formData.password)) {
+        return '비밀번호에 특수문자(!@#$%^&* 등)를 하나 이상 포함해야 합니다.';
+      }
+      return null;
+    };
+
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      setLoading(true);
       setError('');
 
+      if (isSignUp) {
+        const validationError = validateSignUp();
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+      }
+
+      setLoading(true);
       try {
         if (isSignUp) {
-          if (!formData.displayName) {
-            setError('닉네임을 입력해주세요.');
-            setLoading(false);
-            return;
-          }
           await signUpLocal(formData);
         } else {
           await signInLocal({ email: formData.email, password: formData.password });
@@ -224,9 +246,13 @@ export function ProfilePanel() {
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                placeholder="닉네임"
+                placeholder="2~16자 닉네임 입력"
+                maxLength={16}
                 disabled={loading}
               />
+              <small style={{ color: formData.displayName.length > 16 ? '#dc3545' : '#888' }}>
+                {formData.displayName.length}/16자
+              </small>
             </label>
           )}
           {isSignUp && (
@@ -280,9 +306,12 @@ export function ProfilePanel() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
-              placeholder="••••••"
+              placeholder={isSignUp ? '8자 이상, 특수문자 포함' : '비밀번호 입력'}
               disabled={loading}
             />
+            {isSignUp && (
+              <small style={{ color: '#888' }}>최소 8자 이상, 특수문자(!@#$%^&amp;* 등) 1개 이상 필수</small>
+            )}
           </label>
           {error && <p style={{ color: '#dc3545' }}>{error}</p>}
           <button type="submit" className="primary-button" disabled={loading}>

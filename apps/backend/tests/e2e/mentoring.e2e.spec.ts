@@ -7,23 +7,13 @@ import { resolve } from 'node:path';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
+import { createAdminSession } from '../support/e2e-helpers';
 
 describe('Mentoring API (e2e)', () => {
   let app: INestApplication;
   let authService: AuthService;
   let testDbPath = '';
   const originalDbPath = process.env.DB_PATH;
-
-  async function createAdminSession() {
-    process.env.GOOGLE_ADMIN_EMAILS = 'mentoring-admin@example.com';
-    const login = await authService.signInWithGoogle({
-      googleId: `mentoring-admin-${Date.now()}`,
-      email: 'mentoring-admin@example.com',
-      displayName: 'Mentoring Admin',
-    });
-
-    return authService.createSession(login.user.id);
-  }
 
   beforeAll(async () => {
     testDbPath = resolve(process.cwd(), `data/test-mentoring-e2e-${randomUUID()}.sqlite`);
@@ -111,7 +101,11 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('GET /mentoring/sessions/sla/breaches -> 200 with admin role', async () => {
-    const adminSession = await createAdminSession();
+    const adminSession = await createAdminSession(authService, {
+      email: 'mentoring-admin@example.com',
+      googleId: `mentoring-admin-${Date.now()}`,
+      displayName: 'Mentoring Admin',
+    });
 
     const session = await request(app.getHttpServer())
       .post('/mentoring/sessions')

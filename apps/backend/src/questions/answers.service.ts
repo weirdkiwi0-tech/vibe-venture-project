@@ -24,6 +24,8 @@ export interface AnswerCommentNode {
   authorId: string;
   authorVisibility: 'public' | 'anonymous';
   authorName: string;
+  authorAvatar: string;
+  authorPhotoUrl?: string;
   content: string;
   attachments: string[];
   parentCommentId: string | null;
@@ -119,7 +121,8 @@ export class AnswersService {
 
     comments.push(comment);
     this.commentsByAnswerId.set(answerId, comments);
-    return this.toCommentNode(comment, []);
+    const [node] = await this.buildCommentTree([comment]);
+    return node ?? this.toCommentNode(comment, []);
   }
 
   async listComments(answerId: string): Promise<AnswerCommentNode[]> {
@@ -148,11 +151,11 @@ export class AnswersService {
 
   async findByQuestionIdWithMeta(questionId: string): Promise<AnswerWithMeta[]> {
     const answers = await this.findByQuestionId(questionId);
-    return answers.map((answer) => ({
+    return Promise.all(answers.map(async (answer) => ({
       answer,
       likeCount: this.likesByAnswerId.get(answer.id)?.size ?? 0,
-      comments: this.buildCommentTree(this.commentsByAnswerId.get(answer.id) ?? []),
-    }));
+      comments: await this.buildCommentTree(this.commentsByAnswerId.get(answer.id) ?? []),
+    })));
   }
 
   async findByQuestionId(questionId: string) {
@@ -197,13 +200,24 @@ export class AnswersService {
     return answer;
   }
 
-  private buildCommentTree(records: AnswerCommentRecord[]): AnswerCommentNode[] {
+  private async buildCommentTree(records: AnswerCommentRecord[]): Promise<AnswerCommentNode[]> {
+    // Pre-resolve unique non-anonymous authors in batch
+    const uniqueAuthorIds = [...new Set(records.filter((r) => r.authorVisibility !== 'anonymous').map((r) => r.authorId))];
+    const userInfoMap = new Map<string, { name: string; avatar: string; photoUrl?: string }>();
+    await Promise.all(uniqueAuthorIds.map(async (userId) => {
+      const user = this.authService ? await this.authService.getUserById(userId).catch(() => undefined) : undefined;
+      const name = user?.displayName ?? userId;
+      const avatar = name.trim() ? name.trim().slice(0, 1).toUpperCase() : 'U';
+      userInfoMap.set(userId, { name, avatar, photoUrl: user?.photoUrl });
+    }));
+
     const nodes = new Map<string, AnswerCommentNode>();
     const roots: AnswerCommentNode[] = [];
 
     const sorted = [...records].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     for (const record of sorted) {
-      nodes.set(record.id, this.toCommentNode(record, []));
+      const userInfo = record.authorVisibility !== 'anonymous' ? userInfoMap.get(record.authorId) : undefined;
+      nodes.set(record.id, this.toCommentNode(record, [], userInfo));
     }
 
     for (const record of sorted) {
@@ -224,13 +238,18 @@ export class AnswersService {
     return roots;
   }
 
-  private toCommentNode(record: AnswerCommentRecord, replies: AnswerCommentNode[]): AnswerCommentNode {
+  private toCommentNode(record: AnswerCommentRecord, replies: AnswerCommentNode[], userInfo?: { name: string; avatar: string; photoUrl?: string }): AnswerCommentNode {
+    const isAnonymous = record.authorVisibility === 'anonymous';
+    const name = isAnonymous ? '익명' : (userInfo?.name ?? record.authorId);
+    const avatar = isAnonymous ? '익' : (userInfo?.avatar ?? (name.trim().slice(0, 1).toUpperCase() || 'U'));
     return {
       id: record.id,
       answerId: record.answerId,
       authorId: record.authorId,
       authorVisibility: record.authorVisibility,
-      authorName: record.authorVisibility === 'anonymous' ? '익명' : record.authorId,
+      authorName: name,
+      authorAvatar: avatar,
+      authorPhotoUrl: isAnonymous ? undefined : userInfo?.photoUrl,
       content: record.content,
       attachments: record.attachments,
       parentCommentId: record.parentCommentId,

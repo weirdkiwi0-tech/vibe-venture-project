@@ -12,3 +12,8 @@ apps/backend/data/
 *.log
 .DS_Store
 tmp/
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging

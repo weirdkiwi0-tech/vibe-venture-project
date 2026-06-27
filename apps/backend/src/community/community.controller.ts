@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from '../auth';
 import {
@@ -167,14 +167,20 @@ export class CommunityController {
   }
 
   @Post('posts/:id/like')
-  async likePost(@Param('id') id: string, @Req() req: Request) {
+  @HttpCode(200)
+  async likePost(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const user = await this.authService.getUserBySessionId(sessionId);
-    if (!user) {
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
+    const userId = sessionUser?.id ?? userIdHeader;
+    if (!userId) {
       throw new UnauthorizedException('login required to like post');
     }
 
-    return this.communityService.likePost(id, user.id);
+    return this.communityService.likePost(id, userId);
   }
 
   @Delete('posts/:id')

@@ -909,4 +909,154 @@ describe('Questions API (e2e)', () => {
 
     expect(createdQuestions).toHaveLength(13);
   });
+
+  it('GET /questions/:id 응답에 authorName 필드 존재하고 non-null', async () => {
+    const res = await request(app.getHttpServer()).post('/questions').send({
+      title: 'authorName 기본 검증',
+      body: '내용',
+      subject: 'MATH',
+      grade: '1',
+    });
+    expect(res.status).toBe(201);
+
+    const detail = await request(app.getHttpServer()).get(`/questions/${res.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.authorName).toBeDefined();
+    expect(detail.body.authorName).not.toBeNull();
+  });
+
+  it('visibility: anonymous → authorName 익명, authorPhotoUrl undefined', async () => {
+    const res = await request(app.getHttpServer()).post('/questions').send({
+      title: 'anonymous author test',
+      body: '내용',
+      subject: 'MATH',
+      grade: '1',
+      visibility: 'anonymous',
+    });
+    expect(res.status).toBe(201);
+
+    const detail = await request(app.getHttpServer()).get(`/questions/${res.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.authorName).toBe('익명');
+    expect(detail.body.authorPhotoUrl).toBeUndefined();
+  });
+
+  it('visibility: nickname → authorName이 실제 displayName과 일치', async () => {
+    const { user } = await authService.signUpLocal({
+      email: `nickname-q-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '질문작성자닉네임',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const created = await request(app.getHttpServer())
+      .post('/questions')
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({
+        title: 'nickname visibility question',
+        body: '내용',
+        subject: 'MATH',
+        grade: '1',
+        visibility: 'nickname',
+      });
+    expect(created.status).toBe(201);
+
+    const detail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.authorName).toBe('질문작성자닉네임');
+  });
+
+  it('답변(answer)에 authorName, authorAvatar 필드 존재', async () => {
+    const question = await request(app.getHttpServer()).post('/questions').send({
+      title: 'answer author fields test',
+      body: '내용',
+      subject: 'MATH',
+      grade: '1',
+    });
+    expect(question.status).toBe(201);
+
+    const { user } = await authService.signUpLocal({
+      email: `answer-author-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '답변작성자',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    await request(app.getHttpServer())
+      .post(`/questions/${question.body.id}/answers`)
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ type: 'text', content: '답변 내용' });
+
+    const answers = await request(app.getHttpServer()).get(`/questions/${question.body.id}/answers`);
+    expect(answers.status).toBe(200);
+    expect(answers.body.length).toBeGreaterThan(0);
+    const answer = answers.body[0];
+    expect(answer.authorName).toBeDefined();
+    expect(answer.authorAvatar).toBeDefined();
+  });
+
+  it('답변 댓글에 authorAvatar 필드 존재', async () => {
+    const question = await request(app.getHttpServer()).post('/questions').send({
+      title: 'answer comment author test',
+      body: '내용',
+      subject: 'MATH',
+      grade: '1',
+    });
+
+    const { user } = await authService.signUpLocal({
+      email: `ans-comment-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '댓글작성자',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const answer = await request(app.getHttpServer())
+      .post(`/questions/${question.body.id}/answers`)
+      .set('x-user-id', user.id)
+      .send({ type: 'text', content: '답변' });
+
+    await request(app.getHttpServer())
+      .post(`/questions/answers/${answer.body.id}/comments`)
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ content: '답변 댓글', authorVisibility: 'public' });
+
+    const comments = await request(app.getHttpServer()).get(`/questions/answers/${answer.body.id}/comments`);
+    expect(comments.status).toBe(200);
+    expect(comments.body.length).toBeGreaterThan(0);
+    expect(comments.body[0].authorAvatar).toBeDefined();
+  });
+
+  it('답변 댓글 authorVisibility=anonymous → authorName=익명', async () => {
+    const question = await request(app.getHttpServer()).post('/questions').send({
+      title: 'anon comment author test',
+      body: '내용',
+      subject: 'MATH',
+      grade: '1',
+    });
+    expect(question.status).toBe(201);
+
+    const { user } = await authService.signUpLocal({
+      email: `anon-ans-comment-${Date.now()}@test.com`,
+      password: 'Secure@99',
+      displayName: '익명댓글작성자',
+    });
+    const sessionId = await authService.createSession(user.id);
+
+    const answer = await request(app.getHttpServer())
+      .post(`/questions/${question.body.id}/answers`)
+      .set('x-user-id', user.id)
+      .send({ type: 'text', content: '답변' });
+    expect(answer.status).toBe(201);
+
+    const comment = await request(app.getHttpServer())
+      .post(`/questions/answers/${answer.body.id}/comments`)
+      .set('Cookie', [`keepit-session=${sessionId}`])
+      .set('x-user-id', user.id)
+      .send({ content: '익명 답변 댓글', authorVisibility: 'anonymous' });
+    expect(comment.status).toBe(201);
+    expect(comment.body.authorName).toBe('익명');
+  });
 });

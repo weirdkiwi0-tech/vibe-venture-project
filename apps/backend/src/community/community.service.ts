@@ -161,6 +161,18 @@ export class CommunityService {
   async getProfile(profileId: string, currentUserId?: string): Promise<CommunityProfileDetail> {
     const profile = this.requireProfile(profileId);
     const viewerId = currentUserId ?? 'anonymous-user';
+
+    // Enrich profile with real auth data when available
+    const authUser = await this.authService.getUserById(profileId);
+    if (authUser) {
+      if (authUser.displayName && authUser.displayName !== profile.name) {
+        profile.name = authUser.displayName;
+        profile.avatar = authUser.displayName.trim().slice(0, 1).toUpperCase() || profile.avatar;
+      }
+      if (authUser.photoUrl) {
+        profile.photoUrl = authUser.photoUrl;
+      }
+    }
     const requests = this.friendRequests.filter(
       (request) =>
         request.status === 'pending' &&
