@@ -29,6 +29,40 @@ describe('QuestionsService + Repository (integration)', () => {
     expect(found.answerCount).toBe(0);
   });
 
+  it('keeps visibility consistently across create and query flow', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    const defaultVisibility = await service.create({
+      title: 'integration visibility default',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    const nicknameVisibility = await service.create({
+      title: 'integration visibility nickname',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    });
+
+    const defaultDetail = await service.findById(defaultVisibility.id);
+    const nicknameDetail = await service.findById(nicknameVisibility.id);
+    const listed = await service.listTopQuestions(10, { subject: 'MATH', grade: '2' });
+
+    const listedDefault = listed.find((item) => item.question.id === defaultVisibility.id);
+    const listedNickname = listed.find((item) => item.question.id === nicknameVisibility.id);
+
+    expect(defaultDetail.question.visibility).toBe('anonymous');
+    expect(nicknameDetail.question.visibility).toBe('nickname');
+    expect(listedDefault?.question.visibility).toBe('anonymous');
+    expect(listedNickname?.question.visibility).toBe('nickname');
+  });
+
   it('solves question and persists solved state', async () => {
     const repo = new InMemoryQuestionRepository();
     const answerRepo = new InMemoryAnswerRepository();

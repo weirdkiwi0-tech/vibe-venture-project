@@ -31,6 +31,20 @@ describe('QuestionEntity', () => {
     ).toThrow(DomainValidationError);
   });
 
+  it('throws when visibility is invalid', () => {
+    expect(() =>
+      QuestionEntity.create({
+        id: 'q-1',
+        authorId: 'u-1',
+        title: 'title',
+        body: 'body',
+        subject: 'MATH',
+        grade: '1',
+        visibility: 'private' as unknown as 'anonymous' | 'nickname',
+      }),
+    ).toThrow(DomainValidationError);
+  });
+
   it('solves an open question', () => {
     const question = QuestionEntity.create({
       id: 'q-2',

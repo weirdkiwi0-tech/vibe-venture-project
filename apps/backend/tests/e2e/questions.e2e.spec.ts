@@ -60,6 +60,65 @@ describe('Questions API (e2e)', () => {
     expect(res.body.status).toBe('open');
   });
 
+  it('POST /questions defaults visibility to anonymous and keeps it in list/detail', async () => {
+    const uniqueTitle = `visibility-default-${Date.now()}`;
+    const created = await request(app.getHttpServer()).post('/questions').send({
+      title: uniqueTitle,
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.visibility).toBe('anonymous');
+
+    const listRes = await request(app.getHttpServer()).get(
+      `/questions?title=${encodeURIComponent(uniqueTitle)}`,
+    );
+    expect(listRes.status).toBe(200);
+    expect(listRes.body[0].visibility).toBe('anonymous');
+
+    const detailRes = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.body.visibility).toBe('anonymous');
+  });
+
+  it('POST /questions stores nickname visibility and keeps it in list/detail', async () => {
+    const uniqueTitle = `visibility-nickname-${Date.now()}`;
+    const created = await request(app.getHttpServer()).post('/questions').send({
+      title: uniqueTitle,
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.visibility).toBe('nickname');
+
+    const listRes = await request(app.getHttpServer()).get(
+      `/questions?title=${encodeURIComponent(uniqueTitle)}`,
+    );
+    expect(listRes.status).toBe(200);
+    expect(listRes.body[0].visibility).toBe('nickname');
+
+    const detailRes = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.body.visibility).toBe('nickname');
+  });
+
+  it('POST /questions -> 400 when visibility is invalid', async () => {
+    const res = await request(app.getHttpServer()).post('/questions').send({
+      title: 'invalid visibility',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'private',
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   it('POST /questions -> 400 when title missing', async () => {
     const res = await request(app.getHttpServer()).post('/questions').send({
       body: 'E2E body',

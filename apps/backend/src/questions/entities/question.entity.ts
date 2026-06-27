@@ -3,6 +3,8 @@ import { DomainValidationError } from '../errors/domain-validation.error';
 export type QuestionStatus = 'open' | 'solved';
 export type Visibility = 'anonymous' | 'nickname';
 
+const QUESTION_VISIBILITIES: Visibility[] = ['anonymous', 'nickname'];
+
 export interface CreateQuestionEntityProps {
   id: string;
   authorId: string;
@@ -61,6 +63,9 @@ export class QuestionEntity {
       throw new DomainValidationError('subject is required');
     if (!props.grade?.trim())
       throw new DomainValidationError('grade is required');
+    if (props.visibility && !QUESTION_VISIBILITIES.includes(props.visibility)) {
+      throw new DomainValidationError('visibility must be anonymous or nickname');
+    }
 
     return new QuestionEntity({
       ...props,

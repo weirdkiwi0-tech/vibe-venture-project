@@ -35,6 +35,29 @@ describe('QuestionsService (unit)', () => {
     expect(question.title).toBe('Trig question');
   });
 
+  it('uses anonymous visibility by default when not provided', async () => {
+    const question = await service.create({
+      title: 'Default visibility question',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    expect(question.visibility).toBe('anonymous');
+  });
+
+  it('stores nickname visibility when provided', async () => {
+    const question = await service.create({
+      title: 'Nickname visibility question',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    });
+
+    expect(question.visibility).toBe('nickname');
+  });
+
   it('throws NotFoundException when question does not exist', async () => {
     await expect(service.findById('nope')).rejects.toThrow(NotFoundException);
   });
