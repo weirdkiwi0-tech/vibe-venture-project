@@ -249,6 +249,29 @@ describe('QuestionsService (unit)', () => {
     expect(fourth.liked).toBe(true);
   });
 
+  it('normalizes negative likeCount seed and keeps likeCount non-negative while toggling', async () => {
+    await questionRepo.save(
+      QuestionEntity.create({
+        id: 'q-like-non-negative-unit',
+        authorId: 'author-1',
+        title: 'non-negative likeCount unit',
+        body: 'body',
+        subject: 'MATH',
+        grade: '2',
+        likeCount: -3,
+      }),
+    );
+
+    const first = await service.like('q-like-non-negative-unit', 'user-like-1');
+    const second = await service.like('q-like-non-negative-unit', 'user-like-1');
+
+    expect(first.liked).toBe(true);
+    expect(second.liked).toBe(false);
+    expect(first.question.likeCount).toBe(1);
+    expect(second.question.likeCount).toBe(0);
+    expect(second.question.likeCount).toBeGreaterThanOrEqual(0);
+  });
+
   it('returns available questions when total count is less than 10', async () => {
     await service.create({
       title: 'only one',

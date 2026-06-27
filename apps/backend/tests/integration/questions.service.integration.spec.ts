@@ -4,6 +4,7 @@ import { InMemoryQuestionLikeRepository } from '../../src/questions/in-memory-qu
 import { InMemoryQuestionRepository } from '../../src/questions/in-memory-question.repository';
 import { QuestionsService } from '../../src/questions/questions.service';
 import { AnswerEntity } from '../../src/questions/entities/answer.entity';
+import { QuestionEntity } from '../../src/questions/entities/question.entity';
 import { ReportsService } from '../../src/reports/reports.service';
 import { InMemoryReportRepository } from '../../src/reports/in-memory-report.repository';
 import { InMemoryAdminAuditLogRepository } from '../../src/reports/in-memory-admin-audit-log.repository';
@@ -302,6 +303,34 @@ describe('QuestionsService + Repository (integration)', () => {
 
     expect(likedBySecond.question.likeCount).toBe(1);
     expect(likedAgainByFirst.question.likeCount).toBe(2);
+  });
+
+  it('normalizes negative likeCount seed and keeps toggle contract non-negative', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    await repo.save(
+      QuestionEntity.create({
+        id: 'q-like-non-negative-integration',
+        authorId: 'author-1',
+        title: 'non-negative likeCount integration',
+        body: 'body',
+        subject: 'MATH',
+        grade: '2',
+        likeCount: -5,
+      }),
+    );
+
+    const first = await service.like('q-like-non-negative-integration', 'user-like-1');
+    const second = await service.like('q-like-non-negative-integration', 'user-like-1');
+
+    expect(first.liked).toBe(true);
+    expect(second.liked).toBe(false);
+    expect(first.question.likeCount).toBe(1);
+    expect(second.question.likeCount).toBe(0);
+    expect(second.question.likeCount).toBeGreaterThanOrEqual(0);
   });
 
   it('allows admin to open question detail even when admin reported that question', async () => {

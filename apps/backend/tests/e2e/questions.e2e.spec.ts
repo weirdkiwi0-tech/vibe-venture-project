@@ -603,6 +603,66 @@ describe('Questions API (e2e)', () => {
     expect(fourth.body.liked).toBe(true);
   });
 
+  it('keeps like toggle contract and likeCount consistency across list/detail while preserving 401 for unauthenticated users', async () => {
+    const uniqueTitle = `like-contract-${Date.now()}`;
+    const created = await request(app.getHttpServer()).post('/questions').send({
+      title: uniqueTitle,
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    expect(created.status).toBe(201);
+
+    const identity = await authService.signInWithGoogle({
+      googleId: `google-like-contract-${Date.now()}`,
+      email: `like-contract-${Date.now()}@example.com`,
+      displayName: 'Like Contract User',
+    });
+    const sessionId = await authService.createSession(identity.user.id);
+
+    const unauthorized = await request(app.getHttpServer())
+      .post(`/questions/${created.body.id}/like`)
+      .set('x-user-id', identity.user.id);
+    expect(unauthorized.status).toBe(401);
+
+    const first = await request(app.getHttpServer())
+      .post(`/questions/${created.body.id}/like`)
+      .set('Cookie', [`keepit-session=${sessionId}`]);
+    expect(first.status).toBe(201);
+    expect(first.body.liked).toBe(true);
+    expect(first.body.likeCount).toBe(1);
+
+    const listAfterFirst = await request(app.getHttpServer()).get(
+      `/questions/all?title=${encodeURIComponent(uniqueTitle)}`,
+    );
+    const detailAfterFirst = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(listAfterFirst.status).toBe(200);
+    expect(detailAfterFirst.status).toBe(200);
+    expect(listAfterFirst.body).toHaveLength(1);
+    expect(listAfterFirst.body[0].likeCount).toBe(1);
+    expect(detailAfterFirst.body.likeCount).toBe(1);
+
+    const second = await request(app.getHttpServer())
+      .post(`/questions/${created.body.id}/like`)
+      .set('Cookie', [`keepit-session=${sessionId}`]);
+    expect(second.status).toBe(201);
+    expect(second.body.liked).toBe(false);
+    expect(second.body.likeCount).toBe(0);
+    expect(second.body.likeCount).toBeGreaterThanOrEqual(0);
+
+    const listAfterSecond = await request(app.getHttpServer()).get(
+      `/questions/all?title=${encodeURIComponent(uniqueTitle)}`,
+    );
+    const detailAfterSecond = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(listAfterSecond.status).toBe(200);
+    expect(detailAfterSecond.status).toBe(200);
+    expect(listAfterSecond.body).toHaveLength(1);
+    expect(listAfterSecond.body[0].likeCount).toBe(0);
+    expect(detailAfterSecond.body.likeCount).toBe(0);
+    expect(detailAfterSecond.body.likeCount).toBeGreaterThanOrEqual(0);
+  });
+
   it('POST /questions/:id/like -> 401 when user header is missing', async () => {
     const created = await request(app.getHttpServer()).post('/questions').send({
       title: 'like auth required',

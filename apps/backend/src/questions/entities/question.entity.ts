@@ -72,7 +72,7 @@ export class QuestionEntity {
       attachments: props.attachments ?? [],
       visibility: props.visibility ?? 'anonymous',
       status: props.status ?? 'open',
-      likeCount: props.likeCount ?? 0,
+      likeCount: Math.max(0, props.likeCount ?? 0),
       viewCount: props.viewCount ?? 0,
       createdAt: props.createdAt ?? new Date(),
       updatedAt: props.updatedAt ?? props.createdAt ?? new Date(),
