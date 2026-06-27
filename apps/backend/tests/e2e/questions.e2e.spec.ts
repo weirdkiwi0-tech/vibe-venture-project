@@ -274,6 +274,92 @@ describe('Questions API (e2e)', () => {
     expect(questionRes.body.answerCount).toBe(1);
   });
 
+  it('shows just-created answer immediately and preserves author/content/type/attachments', async () => {
+    const createdQuestion = await request(app.getHttpServer()).post('/questions').send({
+      title: 'immediate answer visibility',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    const createdAnswer = await request(app.getHttpServer())
+      .post(`/questions/${createdQuestion.body.id}/answers`)
+      .set('x-user-id', 'teacher-a')
+      .send({
+        type: 'video',
+        content: 'video explanation',
+        attachments: ['data:video/mp4;base64,AAAA'],
+      });
+
+    expect(createdAnswer.status).toBe(201);
+    expect(createdAnswer.body.authorId).toBe('teacher-a');
+    expect(createdAnswer.body.content).toBe('video explanation');
+    expect(createdAnswer.body.type).toBe('video');
+    expect(createdAnswer.body.attachments).toEqual(['data:video/mp4;base64,AAAA']);
+
+    const listed = await request(app.getHttpServer()).get(
+      `/questions/${createdQuestion.body.id}/answers`,
+    );
+
+    expect(listed.status).toBe(200);
+    expect(listed.body).toHaveLength(1);
+    expect(listed.body[0].id).toBe(createdAnswer.body.id);
+    expect(listed.body[0].authorId).toBe('teacher-a');
+    expect(listed.body[0].content).toBe('video explanation');
+    expect(listed.body[0].type).toBe('video');
+    expect(listed.body[0].attachments).toEqual(['data:video/mp4;base64,AAAA']);
+  });
+
+  it('uses deterministic ordering for answers: createdAt asc, then id asc', async () => {
+    const createdQuestion = await request(app.getHttpServer()).post('/questions').send({
+      title: 'deterministic answer order',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-03T00:00:00.000Z'));
+
+    try {
+      const createdIds: string[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        const created = await request(app.getHttpServer())
+          .post(`/questions/${createdQuestion.body.id}/answers`)
+          .set('x-user-id', `author-${i}`)
+          .send({
+            type: 'text',
+            content: `answer-${i}`,
+          });
+        expect(created.status).toBe(201);
+        createdIds.push(created.body.id);
+      }
+
+      const listed = await request(app.getHttpServer()).get(
+        `/questions/${createdQuestion.body.id}/answers`,
+      );
+
+      expect(listed.status).toBe(200);
+      const expected = [...createdIds].sort((a, b) => a.localeCompare(b));
+      expect(listed.body.map((item: { id: string }) => item.id)).toEqual(expected);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('returns 404 for creating/listing answers on missing question', async () => {
+    const createRes = await request(app.getHttpServer())
+      .post('/questions/not-found/answers')
+      .send({
+        type: 'text',
+        content: 'answer on missing question',
+      });
+    const listRes = await request(app.getHttpServer()).get('/questions/not-found/answers');
+
+    expect(createRes.status).toBe(404);
+    expect(listRes.status).toBe(404);
+  });
+
   it('rejects non-video attachments when answer type is video', async () => {
     const created = await request(app.getHttpServer()).post('/questions').send({
       title: 'video-only attachment rule',

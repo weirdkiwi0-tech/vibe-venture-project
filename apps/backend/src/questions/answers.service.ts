@@ -159,7 +159,8 @@ export class AnswersService {
     const question = await this.questionRepository.findById(questionId);
     if (!question) throw new NotFoundException('question not found');
 
-    return this.answerRepository.findByQuestionId(questionId);
+    const answers = await this.answerRepository.findByQuestionId(questionId);
+    return this.sortByCreatedAtThenId(answers);
   }
 
   async findByAuthorId(authorId: string) {
@@ -246,5 +247,16 @@ export class AnswersService {
   private isCommentMediaAttachment(attachment: string): boolean {
     const normalized = attachment.trim().toLowerCase();
     return normalized.startsWith('data:image/') || normalized.startsWith('data:video/');
+  }
+
+  private sortByCreatedAtThenId(answers: AnswerEntity[]): AnswerEntity[] {
+    return answers.sort((a, b) => {
+      const createdAtDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (createdAtDiff !== 0) {
+        return createdAtDiff;
+      }
+
+      return a.id.localeCompare(b.id);
+    });
   }
 }
