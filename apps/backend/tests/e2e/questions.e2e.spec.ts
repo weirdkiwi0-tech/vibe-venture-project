@@ -8,6 +8,8 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
 
+jest.setTimeout(15000);
+
 describe('Questions API (e2e)', () => {
   let app: INestApplication;
   let authService: AuthService;

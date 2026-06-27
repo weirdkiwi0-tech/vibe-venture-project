@@ -440,6 +440,10 @@ export class CommunityService {
       throw new NotFoundException('friend request not found');
     }
 
+    if (request.status !== 'pending') {
+      throw new BadRequestException('friend request is already processed');
+    }
+
     if (request.targetId !== currentUserId) {
       throw new BadRequestException('only the target can accept');
     }
@@ -455,6 +459,10 @@ export class CommunityService {
     const request = this.friendRequests.find((item) => item.id === requestId);
     if (!request) {
       throw new NotFoundException('friend request not found');
+    }
+
+    if (request.status !== 'pending') {
+      throw new BadRequestException('friend request is already processed');
     }
 
     if (request.targetId !== currentUserId) {

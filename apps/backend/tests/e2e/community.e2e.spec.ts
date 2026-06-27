@@ -49,6 +49,17 @@ describe('Community API (e2e)', () => {
     return response;
   };
 
+  const rejectFriendRequest = async (requestId: string, receiverId: string) => {
+    const response = await request(app.getHttpServer())
+      .post(`/community/friend-requests/${encodeURIComponent(requestId)}/reject`)
+      .set('x-user-id', receiverId)
+      .send({});
+
+    expect(response.status).toBe(201);
+
+    return response;
+  };
+
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -92,10 +103,17 @@ describe('Community API (e2e)', () => {
       .get('/community/mailbox')
       .set('x-user-id', target.id);
 
+    const requesterMailbox = await request(app.getHttpServer())
+      .get('/community/mailbox')
+      .set('x-user-id', requester.id);
+
     expect(mailbox.status).toBe(200);
+    expect(requesterMailbox.status).toBe(200);
     expect(Array.isArray(mailbox.body.friendRequests)).toBe(true);
     const acceptedRequest = mailbox.body.friendRequests.find((item: { id: string }) => item.id === requestFriend.body.id);
+    const requesterAcceptedRequest = requesterMailbox.body.friendRequests.find((item: { id: string }) => item.id === requestFriend.body.id);
     expect(acceptedRequest?.status).toBe('accepted');
+    expect(requesterAcceptedRequest?.status).toBe('accepted');
 
     const board = await request(app.getHttpServer())
       .get('/community')
@@ -104,6 +122,79 @@ describe('Community API (e2e)', () => {
     expect(board.status).toBe(200);
     expect(Array.isArray(board.body.friends)).toBe(true);
     expect(board.body.friends.some((friend: { id: string }) => friend.id === target.id)).toBe(true);
+
+    const targetBoard = await request(app.getHttpServer())
+      .get('/community')
+      .set('x-user-id', target.id);
+
+    expect(targetBoard.status).toBe(200);
+    expect(targetBoard.body.friends.some((friend: { id: string }) => friend.id === requester.id)).toBe(true);
+
+    const requesterProfileAfterAccept = await request(app.getHttpServer())
+      .get(`/community/profiles/${encodeURIComponent(target.id)}?currentUserId=${encodeURIComponent(requester.id)}`)
+      .set('x-user-id', requester.id);
+    const targetProfileAfterAccept = await request(app.getHttpServer())
+      .get(`/community/profiles/${encodeURIComponent(requester.id)}?currentUserId=${encodeURIComponent(target.id)}`)
+      .set('x-user-id', target.id);
+
+    expect(requesterProfileAfterAccept.status).toBe(200);
+    expect(targetProfileAfterAccept.status).toBe(200);
+    expect(requesterProfileAfterAccept.body.profile.relationship).toBe('friend');
+    expect(targetProfileAfterAccept.body.profile.relationship).toBe('friend');
+  });
+
+  it('친구 요청 거절 후 양쪽 mailbox에 동일한 상태가 반영된다', async () => {
+    const requester = await signUpUser('community-reject-requester', '거절요청자');
+    const target = await signUpUser('community-reject-target', '거절대상자');
+
+    const requestFriend = await createFriendRequest(requester.id, target.id);
+    const rejected = await rejectFriendRequest(requestFriend.body.id as string, target.id);
+
+    expect(rejected.body.status).toBe('rejected');
+
+    const requesterMailbox = await request(app.getHttpServer())
+      .get('/community/mailbox')
+      .set('x-user-id', requester.id);
+    const targetMailbox = await request(app.getHttpServer())
+      .get('/community/mailbox')
+      .set('x-user-id', target.id);
+
+    expect(requesterMailbox.status).toBe(200);
+    expect(targetMailbox.status).toBe(200);
+
+    const requesterRejected = requesterMailbox.body.friendRequests.find((item: { id: string }) => item.id === requestFriend.body.id);
+    const targetRejected = targetMailbox.body.friendRequests.find((item: { id: string }) => item.id === requestFriend.body.id);
+
+    expect(requesterRejected?.status).toBe('rejected');
+    expect(targetRejected?.status).toBe('rejected');
+  });
+
+  it('수락/거절이 완료된 친구 요청은 재처리할 수 없다', async () => {
+    const acceptRequester = await signUpUser('community-terminal-accept-requester', '완료요청자A');
+    const acceptTarget = await signUpUser('community-terminal-accept-target', '완료대상자A');
+
+    const acceptedRequest = await createFriendRequest(acceptRequester.id, acceptTarget.id);
+    await acceptFriendRequest(acceptedRequest.body.id as string, acceptTarget.id);
+
+    const rejectAfterAccept = await request(app.getHttpServer())
+      .post(`/community/friend-requests/${encodeURIComponent(acceptedRequest.body.id as string)}/reject`)
+      .set('x-user-id', acceptTarget.id)
+      .send({});
+
+    expect(rejectAfterAccept.status).toBe(400);
+
+    const rejectRequester = await signUpUser('community-terminal-reject-requester', '완료요청자B');
+    const rejectTarget = await signUpUser('community-terminal-reject-target', '완료대상자B');
+
+    const rejectedRequest = await createFriendRequest(rejectRequester.id, rejectTarget.id);
+    await rejectFriendRequest(rejectedRequest.body.id as string, rejectTarget.id);
+
+    const acceptAfterReject = await request(app.getHttpServer())
+      .post(`/community/friend-requests/${encodeURIComponent(rejectedRequest.body.id as string)}/accept`)
+      .set('x-user-id', rejectTarget.id)
+      .send({});
+
+    expect(acceptAfterReject.status).toBe(400);
   });
 
   it('익명 댓글 작성자의 신원을 생성/조회 응답에서 마스킹한다', async () => {

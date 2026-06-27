@@ -49,6 +49,38 @@ describe('CommunityService (integration)', () => {
     const mailbox = await service.getMailbox('friend-user');
     const acceptedRequest = mailbox.friendRequests.find((item) => item.id === accepted.id);
     expect(acceptedRequest?.status).toBe('accepted');
+
+    const requesterMailbox = await service.getMailbox('student-jun');
+    const requesterAcceptedRequest = requesterMailbox.friendRequests.find((item) => item.id === accepted.id);
+    const receiverRejectedRequest = mailbox.friendRequests.find((item) => item.id === rejected.id);
+    const requesterRejectedRequest = requesterMailbox.friendRequests.find((item) => item.id === rejected.id);
+
+    expect(requesterAcceptedRequest?.status).toBe('accepted');
+    expect(receiverRejectedRequest?.status).toBe('rejected');
+    expect(requesterRejectedRequest?.status).toBe('rejected');
+
+    const requesterProfile = await service.getProfile('friend-user', 'student-jun');
+    const receiverProfile = await service.getProfile('student-jun', 'friend-user');
+
+    expect(requesterProfile.profile.relationship).toBe('friend');
+    expect(receiverProfile.profile.relationship).toBe('friend');
+  });
+
+  it('does not allow re-processing after request is already accepted or rejected', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+
+    const accepted = await service.requestFriend('student-jun', 'friend-user');
+    await service.acceptFriendRequest(accepted.id, 'friend-user');
+
+    await expect(service.rejectFriendRequest(accepted.id, 'friend-user')).rejects.toThrow('friend request is already processed');
+
+    const rejectOnlyService = new CommunityService(createAuthServiceMock());
+    const rejected = await rejectOnlyService.requestFriend('friend-user', 'student-jun');
+    await rejectOnlyService.rejectFriendRequest(rejected.id, 'student-jun');
+
+    await expect(rejectOnlyService.acceptFriendRequest(rejected.id, 'student-jun')).rejects.toThrow(
+      'friend request is already processed',
+    );
   });
 
   it('keeps anonymous comment identity masked while nickname comments stay visible', async () => {
