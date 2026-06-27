@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth';
-import { DatabaseService } from '../db/database.service';
+import { InMemoryMentoringMessageRepository } from './in-memory-mentoring-message.repository';
+import { InMemoryMentoringSessionRepository } from './in-memory-mentoring-session.repository';
 import { SqliteMentoringMessageRepository } from './sqlite-mentoring-message.repository';
 import { SqliteMentoringSessionRepository } from './sqlite-mentoring-session.repository';
 import { MentoringController } from './mentoring.controller';
@@ -17,16 +18,29 @@ import { MentoringService } from './mentoring.service';
   controllers: [MentoringController],
   providers: [
     MentoringService,
-    DatabaseService,
-    SqliteMentoringSessionRepository,
-    SqliteMentoringMessageRepository,
+    InMemoryMentoringSessionRepository,
+    InMemoryMentoringMessageRepository,
     {
       provide: MENTORING_SESSION_REPOSITORY,
-      useExisting: SqliteMentoringSessionRepository,
+      inject: [InMemoryMentoringSessionRepository],
+      useFactory: (inMemoryRepository: InMemoryMentoringSessionRepository) => {
+        if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
+          return inMemoryRepository;
+        }
+
+        return new SqliteMentoringSessionRepository();
+      },
     },
     {
       provide: MENTORING_MESSAGE_REPOSITORY,
-      useExisting: SqliteMentoringMessageRepository,
+      inject: [InMemoryMentoringMessageRepository],
+      useFactory: (inMemoryRepository: InMemoryMentoringMessageRepository) => {
+        if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
+          return inMemoryRepository;
+        }
+
+        return new SqliteMentoringMessageRepository();
+      },
     },
   ],
 })

@@ -1,46 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
-import { DatabaseService } from '../db/database.service';
+import { TableClient } from '@azure/data-tables';
+import { ensureTable, getTableClient, listAllEntities } from '../db/azure-table.util';
 import { AdminAuditLogEntity } from './entities/admin-audit-log.entity';
 import { AdminAuditLogRepository } from './reports.repository';
 
 @Injectable()
 export class SqliteAdminAuditLogRepository implements AdminAuditLogRepository {
-  constructor(private readonly databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('ADMIN_AUDIT_LOGS_TABLE_NAME', 'adminauditlogs');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async save(entry: AdminAuditLogEntity): Promise<void> {
-    const stmt = this.getDb().prepare(`
-      INSERT OR REPLACE INTO admin_audit_logs (
-        id, adminId, action, targetType, targetId, reason, metadata, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      entry.id,
-      entry.adminId,
-      entry.action,
-      entry.targetType,
-      entry.targetId,
-      entry.reason,
-      JSON.stringify(entry.metadata ?? {}),
-      entry.createdAt.toISOString(),
-    );
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'adminauditlogs',
+      rowKey: entry.id,
+      adminId: entry.adminId,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      reason: entry.reason,
+      metadata: JSON.stringify(entry.metadata ?? {}),
+      createdAt: entry.createdAt.toISOString(),
+    }, 'Replace');
   }
 
   async listAll(): Promise<AdminAuditLogEntity[]> {
-    const rows = this.getDb().prepare('SELECT * FROM admin_audit_logs ORDER BY createdAt DESC').all() as Array<Record<string, unknown>>;
-    return rows.map((row) => this.mapToEntity(row));
+    await this.ensureReady();
+    const rows = await listAllEntities<Record<string, unknown>>(this.client, `partitionKey eq 'adminauditlogs'`);
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   private mapToEntity(row: Record<string, unknown>): AdminAuditLogEntity {
     const rawMetadata = typeof row.metadata === 'string' ? row.metadata : '{}';
 
     return AdminAuditLogEntity.create({
-      id: String(row.id),
+      id: String(row.rowKey ?? row.id),
       adminId: String(row.adminId),
       action: String(row.action) as 'approve' | 'reject' | 'restore',
       targetType: String(row.targetType) as 'question' | 'answer' | 'video' | 'comment' | 'community-post',

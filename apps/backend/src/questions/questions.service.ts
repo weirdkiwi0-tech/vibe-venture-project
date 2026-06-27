@@ -11,6 +11,10 @@ import { QUESTION_REPOSITORY, QuestionRepository } from './questions.repository'
 type QuestionFilters = { subject?: string; grade?: string; title?: string };
 type QuestionWithAnswerCount = { question: QuestionEntity; answerCount: number };
 
+const TOP_POLICY_LIMIT = 10;
+const TOP_POPULAR_COUNT = 7;
+const TOP_HELP_NEEDED_COUNT = 3;
+
 @Injectable()
 export class QuestionsService {
   constructor(
@@ -109,14 +113,13 @@ export class QuestionsService {
     const filteredQuestions = this.applyFilters(questions, filters, hiddenQuestionIds);
     const withCounts = await this.withAnswerCounts(filteredQuestions);
 
-    const byPopular = [...withCounts].sort((a, b) => {
-      if (b.question.likeCount !== a.question.likeCount) {
-        return b.question.likeCount - a.question.likeCount;
-      }
-      return b.question.createdAt.getTime() - a.question.createdAt.getTime();
-    });
+    const byPopular = this.sortByPopularity(withCounts);
 
     if (typeof limit === 'number') {
+      if (limit === TOP_POLICY_LIMIT && byPopular.length > TOP_POLICY_LIMIT) {
+        return this.applyTopPolicy(byPopular, withCounts);
+      }
+
       return byPopular.slice(0, limit);
     }
 
@@ -155,7 +158,7 @@ export class QuestionsService {
       throw new NotFoundException('question not found');
     }
 
-    const requester = this.authService?.getUserById(requestUserId);
+    const requester = this.authService ? await this.authService.getUserById(requestUserId) : undefined;
     const isAdmin = requester?.role === 'admin';
 
     if (question.authorId !== requestUserId && !isAdmin) {
@@ -175,7 +178,7 @@ export class QuestionsService {
       return new Set<string>();
     }
 
-    const viewer = this.authService?.getUserById(viewerId);
+    const viewer = this.authService ? await this.authService.getUserById(viewerId) : undefined;
     if (viewer?.role === 'admin') {
       return new Set<string>();
     }
@@ -210,5 +213,37 @@ export class QuestionsService {
         answerCount: await this.answerRepository.countByQuestionId(question.id),
       })),
     );
+  }
+
+  private sortByPopularity(items: QuestionWithAnswerCount[]): QuestionWithAnswerCount[] {
+    return [...items].sort((a, b) => {
+      if (b.question.likeCount !== a.question.likeCount) {
+        return b.question.likeCount - a.question.likeCount;
+      }
+      return b.question.createdAt.getTime() - a.question.createdAt.getTime();
+    });
+  }
+
+  private sortByHelpNeeded(items: QuestionWithAnswerCount[]): QuestionWithAnswerCount[] {
+    return [...items].sort((a, b) => {
+      if (a.question.likeCount !== b.question.likeCount) {
+        return a.question.likeCount - b.question.likeCount;
+      }
+      return b.question.createdAt.getTime() - a.question.createdAt.getTime();
+    });
+  }
+
+  private applyTopPolicy(
+    byPopular: QuestionWithAnswerCount[],
+    candidates: QuestionWithAnswerCount[],
+  ): QuestionWithAnswerCount[] {
+    const popular = byPopular.slice(0, TOP_POPULAR_COUNT);
+    const popularIds = new Set(popular.map((item) => item.question.id));
+
+    const helpNeeded = this.sortByHelpNeeded(
+      candidates.filter((item) => !popularIds.has(item.question.id)),
+    ).slice(0, TOP_HELP_NEEDED_COUNT);
+
+    return [...popular, ...helpNeeded];
   }
 }

@@ -1,73 +1,88 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
+import { TableClient } from '@azure/data-tables';
 import { QuestionEntity } from './entities/question.entity';
 import { QuestionRepository } from './questions.repository';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 
 @Injectable()
 export class SqliteQuestionRepository implements QuestionRepository {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('QUESTIONS_TABLE_NAME', 'questions');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async save(question: QuestionEntity): Promise<void> {
-    const stmt = this.getDb().prepare(`
-      INSERT OR REPLACE INTO questions (
-        id, authorId, title, body, subject, grade, attachments,
-        visibility, status, likeCount, viewCount, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      question.id,
-      question.authorId,
-      question.title,
-      question.body,
-      question.subject,
-      question.grade,
-      JSON.stringify(question.attachments),
-      question.visibility,
-      question.status,
-      question.likeCount,
-      question.viewCount,
-      question.createdAt.toISOString(),
-      question.updatedAt.toISOString(),
-    );
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'questions',
+      rowKey: question.id,
+      authorId: question.authorId,
+      title: question.title,
+      body: question.body,
+      subject: question.subject,
+      grade: question.grade,
+      attachments: JSON.stringify(question.attachments),
+      visibility: question.visibility,
+      status: question.status,
+      likeCount: question.likeCount,
+      viewCount: question.viewCount,
+      createdAt: question.createdAt.toISOString(),
+      updatedAt: question.updatedAt.toISOString(),
+    }, 'Replace');
   }
 
   async findById(id: string): Promise<QuestionEntity | null> {
-    const stmt = this.getDb().prepare('SELECT * FROM questions WHERE id = ?');
-    const row = stmt.get(id) as any;
-
-    if (!row) return null;
-
-    return this.mapToEntity(row);
+    await this.ensureReady();
+    try {
+      const row = await this.client.getEntity<Record<string, unknown>>('questions', id);
+      return this.mapToEntity(row);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async findByAuthorId(authorId: string): Promise<QuestionEntity[]> {
-    const stmt = this.getDb().prepare('SELECT * FROM questions WHERE authorId = ? ORDER BY createdAt DESC');
-    const rows = stmt.all(authorId) as any[];
+    await this.ensureReady();
+    const escapedAuthorId = escapeOdataString(authorId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.client,
+      `partitionKey eq 'questions' and authorId eq '${escapedAuthorId}'`,
+    );
 
-    return rows.map((row) => this.mapToEntity(row));
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async listAll(): Promise<QuestionEntity[]> {
-    const stmt = this.getDb().prepare('SELECT * FROM questions ORDER BY createdAt DESC');
-    const rows = stmt.all() as any[];
-
-    return rows.map((row) => this.mapToEntity(row));
+    await this.ensureReady();
+    const rows = await listAllEntities<Record<string, unknown>>(this.client, `partitionKey eq 'questions'`);
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async deleteById(id: string): Promise<void> {
-    const db = this.getDb();
-    const tx = db.transaction((questionId: string) => {
-      db.prepare('DELETE FROM question_likes WHERE questionId = ?').run(questionId);
-      db.prepare('DELETE FROM questions WHERE id = ?').run(questionId);
-    });
-
-    tx(id);
+    await this.ensureReady();
+    try {
+      await this.client.deleteEntity('questions', id);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 404) {
+        throw error;
+      }
+    }
   }
 
   private mapToEntity(row: any): QuestionEntity {

@@ -41,12 +41,12 @@ describe('Auth API (e2e)', () => {
 
   it('GET /auth/me -> authenticated with valid session cookie', async () => {
     process.env.GOOGLE_ADMIN_EMAILS = 'admin@example.com';
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: 'google-e2e-1',
       email: 'admin@example.com',
       displayName: 'E2E Admin',
     });
-    const sessionId = authService.createSession(login.user.id);
+    const sessionId = await authService.createSession(login.user.id);
 
     const res = await request(app.getHttpServer())
       .get('/auth/me')

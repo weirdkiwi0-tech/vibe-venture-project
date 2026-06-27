@@ -6,6 +6,7 @@ import { AnswerEntity } from '../../src/questions/entities/answer.entity';
 import { ReportsService } from '../../src/reports/reports.service';
 import { InMemoryReportRepository } from '../../src/reports/in-memory-report.repository';
 import { InMemoryAdminAuditLogRepository } from '../../src/reports/in-memory-admin-audit-log.repository';
+import { seedTopPolicyQuestions } from '../support/top-policy-fixture';
 
 describe('QuestionsService + Repository (integration)', () => {
   it('creates then fetches question', async () => {
@@ -106,6 +107,33 @@ describe('QuestionsService + Repository (integration)', () => {
 
     expect(filtered).toHaveLength(1);
     expect(filtered[0].question.subject).toBe('MATH');
+  });
+
+  it('returns 7 popular plus 3 help-needed questions for top list policy', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    await seedTopPolicyQuestions(service, 'integration-policy', '2');
+
+    const top = await service.listTopQuestions();
+
+    expect(top).toHaveLength(10);
+    expect(top.slice(0, 7).map((item) => item.question.title)).toEqual([
+      'integration-policy-0',
+      'integration-policy-1',
+      'integration-policy-2',
+      'integration-policy-3',
+      'integration-policy-4',
+      'integration-policy-5',
+      'integration-policy-6',
+    ]);
+    expect(top.slice(7).map((item) => item.question.title).sort()).toEqual([
+      'integration-policy-10',
+      'integration-policy-11',
+      'integration-policy-12',
+    ]);
   });
 
   it('toggles likeCount when same user likes same question repeatedly', async () => {

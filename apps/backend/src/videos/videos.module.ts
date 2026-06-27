@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth';
-import { DatabaseService } from '../db/database.service';
+import { InMemoryVideoRepository } from './in-memory-video.repository';
 import { SqliteVideoRepository } from './sqlite-video.repository';
 import { VIDEO_REPOSITORY } from './videos.repository';
 import { VideosController } from './videos.controller';
@@ -11,11 +11,17 @@ import { VideosService } from './videos.service';
   controllers: [VideosController],
   providers: [
     VideosService,
-    DatabaseService,
-    SqliteVideoRepository,
+    InMemoryVideoRepository,
     {
       provide: VIDEO_REPOSITORY,
-      useExisting: SqliteVideoRepository,
+      inject: [InMemoryVideoRepository],
+      useFactory: (inMemoryRepository: InMemoryVideoRepository) => {
+        if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
+          return inMemoryRepository;
+        }
+
+        return new SqliteVideoRepository();
+      },
     },
   ],
   exports: [VideosService],

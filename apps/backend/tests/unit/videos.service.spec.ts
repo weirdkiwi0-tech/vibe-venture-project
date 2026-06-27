@@ -112,7 +112,7 @@ describe('VideosService (unit)', () => {
     const authServiceMock = {
       getUserById: (id: string) => (id === 'registered-user' ? { id } : undefined),
     } as unknown as AuthService;
-    const localService = new VideosService(repo, undefined, authServiceMock);
+    const localService = new VideosService(repo, authServiceMock);
 
     const created = await localService.create({
       title: 'member view',

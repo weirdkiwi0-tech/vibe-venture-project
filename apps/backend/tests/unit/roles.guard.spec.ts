@@ -14,7 +14,7 @@ function createHttpExecutionContext(request: Record<string, unknown>) {
 }
 
 describe('RolesGuard (unit)', () => {
-  it('allows request when no role requirement is present', () => {
+  it('allows request when no role requirement is present', async () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(undefined),
     } as unknown as Reflector;
@@ -26,16 +26,16 @@ describe('RolesGuard (unit)', () => {
     const guard = new RolesGuard(reflector, authService);
     const context = createHttpExecutionContext({ headers: {} });
 
-    expect(guard.canActivate(context)).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
-  it('uses session role first when keepit-session cookie exists', () => {
+  it('uses session role first when keepit-session cookie exists', async () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['admin']),
     } as unknown as Reflector;
 
     const authService = {
-      getUserBySessionId: jest.fn().mockReturnValue({ role: 'user' }),
+      getUserBySessionId: jest.fn().mockResolvedValue({ role: 'user' }),
     } as unknown as AuthService;
 
     const guard = new RolesGuard(reflector, authService);
@@ -48,16 +48,16 @@ describe('RolesGuard (unit)', () => {
       },
     });
 
-    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
-  it('falls back to x-user-role header when no session is present', () => {
+  it('rejects request when session is missing even if role header exists', async () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['admin']),
     } as unknown as Reflector;
 
     const authService = {
-      getUserBySessionId: jest.fn().mockReturnValue(undefined),
+      getUserBySessionId: jest.fn().mockResolvedValue(undefined),
     } as unknown as AuthService;
 
     const guard = new RolesGuard(reflector, authService);
@@ -68,6 +68,6 @@ describe('RolesGuard (unit)', () => {
       cookies: {},
     });
 
-    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 });

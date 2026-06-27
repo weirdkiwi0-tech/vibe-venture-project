@@ -40,12 +40,12 @@ describe('Authorization API (e2e)', () => {
   it('GET /admin/overview -> 403 when session role is user even if header says admin', async () => {
     process.env.GOOGLE_ADMIN_EMAILS = '';
 
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: 'g-authz-user',
       email: 'user-authz@example.com',
       displayName: 'User Authz',
     });
-    const sessionId = authService.createSession(login.user.id);
+    const sessionId = await authService.createSession(login.user.id);
 
     const res = await request(app.getHttpServer())
       .get('/admin/overview')
@@ -58,12 +58,12 @@ describe('Authorization API (e2e)', () => {
   it('GET /admin/overview -> 200 when session role is admin even if header says user', async () => {
     process.env.GOOGLE_ADMIN_EMAILS = 'admin-authz@example.com';
 
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: 'g-authz-admin',
       email: 'admin-authz@example.com',
       displayName: 'Admin Authz',
     });
-    const sessionId = authService.createSession(login.user.id);
+    const sessionId = await authService.createSession(login.user.id);
 
     const res = await request(app.getHttpServer())
       .get('/admin/overview')

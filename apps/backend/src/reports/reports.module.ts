@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth';
-import { DatabaseService } from '../db/database.service';
+import { InMemoryAdminAuditLogRepository } from './in-memory-admin-audit-log.repository';
+import { InMemoryReportRepository } from './in-memory-report.repository';
 import { ReportsController } from './reports.controller';
 import { ADMIN_AUDIT_LOG_REPOSITORY, REPORT_REPOSITORY } from './reports.repository';
 import { ReportsService } from './reports.service';
@@ -12,16 +13,29 @@ import { SqliteReportRepository } from './sqlite-report.repository';
   controllers: [ReportsController],
   providers: [
     ReportsService,
-    DatabaseService,
-    SqliteReportRepository,
-    SqliteAdminAuditLogRepository,
+    InMemoryReportRepository,
+    InMemoryAdminAuditLogRepository,
     {
       provide: REPORT_REPOSITORY,
-      useExisting: SqliteReportRepository,
+      inject: [InMemoryReportRepository],
+      useFactory: (inMemoryRepository: InMemoryReportRepository) => {
+        if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
+          return inMemoryRepository;
+        }
+
+        return new SqliteReportRepository();
+      },
     },
     {
       provide: ADMIN_AUDIT_LOG_REPOSITORY,
-      useExisting: SqliteAdminAuditLogRepository,
+      inject: [InMemoryAdminAuditLogRepository],
+      useFactory: (inMemoryRepository: InMemoryAdminAuditLogRepository) => {
+        if (!process.env.AZURE_TABLES_CONNECTION_STRING) {
+          return inMemoryRepository;
+        }
+
+        return new SqliteAdminAuditLogRepository();
+      },
     },
   ],
   exports: [ReportsService],

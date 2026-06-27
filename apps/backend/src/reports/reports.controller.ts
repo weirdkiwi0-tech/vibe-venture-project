@@ -20,7 +20,7 @@ export class ReportsController {
     @Headers('x-user-id') reporterId?: string,
   ) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const user = this.authService.getUserBySessionId(sessionId);
+    const user = await this.authService.getUserBySessionId(sessionId);
     const resolvedReporterId = user?.id ?? reporterId;
     const report = await this.reportsService.create(body, resolvedReporterId);
     return {

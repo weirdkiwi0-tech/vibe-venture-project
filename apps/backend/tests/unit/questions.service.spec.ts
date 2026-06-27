@@ -6,6 +6,7 @@ import { AuthService } from '../../src/auth';
 import { AnswerEntity } from '../../src/questions/entities/answer.entity';
 import { QuestionsService } from '../../src/questions/questions.service';
 import { QuestionEntity } from '../../src/questions/entities/question.entity';
+import { seedTopPolicyQuestions } from '../support/top-policy-fixture';
 
 describe('QuestionsService (unit)', () => {
   let service: QuestionsService;
@@ -160,6 +161,27 @@ describe('QuestionsService (unit)', () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0].question.subject).toBe('MATH');
     expect(filtered[0].question.grade).toBe('1');
+  });
+
+  it('applies top policy as popular 7 plus help-needed 3 when there are more than 10 questions', async () => {
+    await seedTopPolicyQuestions(service, 'policy', '1');
+
+    const list = await service.listTopQuestions();
+    expect(list).toHaveLength(10);
+
+    const topTitles = list.slice(0, 7).map((item) => item.question.title);
+    expect(topTitles).toEqual([
+      'policy-0',
+      'policy-1',
+      'policy-2',
+      'policy-3',
+      'policy-4',
+      'policy-5',
+      'policy-6',
+    ]);
+
+    const helpNeededTitles = list.slice(7).map((item) => item.question.title);
+    expect(helpNeededTitles.sort()).toEqual(['policy-10', 'policy-11', 'policy-12']);
   });
 
   it('increases viewCount when viewer is not authenticated', async () => {

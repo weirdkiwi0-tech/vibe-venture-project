@@ -173,7 +173,7 @@ export class AnswersService {
       throw new NotFoundException('answer not found');
     }
 
-    const requester = this.authService?.getUserById(requestUserId);
+    const requester = this.authService ? await this.authService.getUserById(requestUserId) : undefined;
     const isAdmin = requester?.role === 'admin';
 
     if (answer.authorId !== requestUserId && !isAdmin) {

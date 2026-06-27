@@ -14,9 +14,9 @@ describe('Mentoring API (e2e)', () => {
   let testDbPath = '';
   const originalDbPath = process.env.DB_PATH;
 
-  function createAdminSession() {
+  async function createAdminSession() {
     process.env.GOOGLE_ADMIN_EMAILS = 'mentoring-admin@example.com';
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: `mentoring-admin-${Date.now()}`,
       email: 'mentoring-admin@example.com',
       displayName: 'Mentoring Admin',
@@ -111,7 +111,7 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('GET /mentoring/sessions/sla/breaches -> 200 with admin role', async () => {
-    const adminSession = createAdminSession();
+    const adminSession = await createAdminSession();
 
     const session = await request(app.getHttpServer())
       .post('/mentoring/sessions')

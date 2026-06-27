@@ -1,80 +1,91 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
+import { TableClient } from '@azure/data-tables';
 import { MentoringSessionEntity } from './entities/mentoring-session.entity';
 import { MentoringSessionRepository } from './mentoring-session.repository';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 
 @Injectable()
 export class SqliteMentoringSessionRepository
   implements MentoringSessionRepository
 {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('MENTORING_SESSIONS_TABLE_NAME', 'mentoringsessions');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async save(session: MentoringSessionEntity): Promise<void> {
-    const stmt = this.getDb().prepare(`
-      INSERT OR REPLACE INTO mentoring_sessions (
-        id, studentId, mentorId, channelId, question, startedAt, slaDeadline,
-        firstResponseAt, status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      session.id,
-      session.learnerId,
-      '', // mentorId - not in entity
-      '', // channelId - not in entity
-      session.question,
-      session.createdAt.toISOString(),
-      new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h SLA
-      session.firstMentorResponseAt?.toISOString() || null,
-      'active',
-      session.createdAt.toISOString(),
-    );
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'mentoringsessions',
+      rowKey: session.id,
+      learnerId: session.learnerId,
+      question: session.question,
+      createdAt: session.createdAt.toISOString(),
+      firstMentorResponseAt: session.firstMentorResponseAt?.toISOString() ?? null,
+    }, 'Replace');
   }
 
   async findById(id: string): Promise<MentoringSessionEntity | null> {
-    const stmt = this.getDb().prepare('SELECT * FROM mentoring_sessions WHERE id = ?');
-    const row = stmt.get(id) as any;
-
-    if (!row) return null;
-
-    return this.mapToEntity(row);
+    await this.ensureReady();
+    try {
+      const row = await this.client.getEntity<Record<string, unknown>>('mentoringsessions', id);
+      return this.mapToEntity(row);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async findByLearnerId(learnerId: string): Promise<MentoringSessionEntity[]> {
-    const stmt = this.getDb().prepare(
-      'SELECT * FROM mentoring_sessions WHERE studentId = ? ORDER BY createdAt DESC',
+    await this.ensureReady();
+    const escapedLearnerId = escapeOdataString(learnerId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.client,
+      `partitionKey eq 'mentoringsessions' and learnerId eq '${escapedLearnerId}'`,
     );
-    const rows = stmt.all(learnerId) as any[];
 
-    return rows.map((row) => this.mapToEntity(row));
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async listAll(): Promise<MentoringSessionEntity[]> {
-    const stmt = this.getDb().prepare(
-      'SELECT * FROM mentoring_sessions ORDER BY createdAt DESC',
-    );
-    const rows = stmt.all() as any[];
-
-    return rows.map((row) => this.mapToEntity(row));
+    await this.ensureReady();
+    const rows = await listAllEntities<Record<string, unknown>>(this.client, `partitionKey eq 'mentoringsessions'`);
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async deleteById(id: string): Promise<void> {
-    const stmt = this.getDb().prepare('DELETE FROM mentoring_sessions WHERE id = ?');
-    stmt.run(id);
+    await this.ensureReady();
+    try {
+      await this.client.deleteEntity('mentoringsessions', id);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 404) {
+        throw error;
+      }
+    }
   }
 
   private mapToEntity(row: any): MentoringSessionEntity {
     return MentoringSessionEntity.create({
-      id: row.id,
-      learnerId: row.studentId,
-      question: row.question,
-      createdAt: new Date(row.createdAt),
-      firstMentorResponseAt: row.firstResponseAt ? new Date(row.firstResponseAt) : null,
+      id: String(row.rowKey ?? row.id),
+      learnerId: String(row.learnerId),
+      question: String(row.question),
+      createdAt: new Date(String(row.createdAt)),
+      firstMentorResponseAt: row.firstMentorResponseAt ? new Date(String(row.firstMentorResponseAt)) : null,
     });
   }
 }

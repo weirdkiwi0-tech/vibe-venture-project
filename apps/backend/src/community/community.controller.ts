@@ -18,9 +18,9 @@ export class CommunityController {
     private readonly authService: AuthService,
   ) {}
 
-  private resolveAuthenticatedUserId(req: Request, headerUserId?: string) {
+  private async resolveAuthenticatedUserId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     if (sessionUser) {
       return sessionUser.id;
     }
@@ -29,7 +29,7 @@ export class CommunityController {
       return undefined;
     }
 
-    const headerUser = this.authService.getUserById(headerUserId);
+    const headerUser = await this.authService.getUserById(headerUserId);
     return headerUser?.id;
   }
 
@@ -62,7 +62,7 @@ export class CommunityController {
     @Body() body: UpdateCommunityPostDto,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    const userId = await this.resolveAuthenticatedUserId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to edit post');
     }
@@ -76,7 +76,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') currentUserId?: string,
   ) {
-    const viewerId = this.resolveAuthenticatedUserId(req, currentUserId);
+    const viewerId = await this.resolveAuthenticatedUserId(req, currentUserId);
     return this.communityService.getPostDetail(id, viewerId);
   }
 
@@ -86,7 +86,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') currentUserId?: string,
   ) {
-    const viewerId = this.resolveAuthenticatedUserId(req, currentUserId);
+    const viewerId = await this.resolveAuthenticatedUserId(req, currentUserId);
     return this.communityService.getPostComments(id, viewerId);
   }
 
@@ -97,13 +97,13 @@ export class CommunityController {
     @Query('currentUserId') currentUserId?: string,
     @Headers('x-user-id') currentUserHeader?: string,
   ) {
-    const viewerId = this.resolveAuthenticatedUserId(req, currentUserHeader) ?? currentUserId;
+    const viewerId = (await this.resolveAuthenticatedUserId(req, currentUserHeader)) ?? currentUserId;
     return this.communityService.getProfile(id, viewerId);
   }
 
   @Get('mailbox')
   async getMailbox(@Req() req: Request, @Headers('x-user-id') currentUserId?: string) {
-    const viewerId = this.resolveAuthenticatedUserId(req, currentUserId);
+    const viewerId = await this.resolveAuthenticatedUserId(req, currentUserId);
     if (!viewerId) {
       throw new UnauthorizedException('login required to view mailbox');
     }
@@ -118,7 +118,7 @@ export class CommunityController {
     @Body() body: CreateCommunityCommentDto,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    const userId = await this.resolveAuthenticatedUserId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to comment');
     }
@@ -138,7 +138,7 @@ export class CommunityController {
     @Body() body: UpdateCommunityCommentDto,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    const userId = await this.resolveAuthenticatedUserId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to edit comment');
     }
@@ -153,7 +153,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    const userId = await this.resolveAuthenticatedUserId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to like comment');
     }
@@ -169,7 +169,7 @@ export class CommunityController {
   @Post('posts/:id/like')
   async likePost(@Param('id') id: string, @Req() req: Request) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const user = this.authService.getUserBySessionId(sessionId);
+    const user = await this.authService.getUserBySessionId(sessionId);
     if (!user) {
       throw new UnauthorizedException('login required to like post');
     }
@@ -184,7 +184,7 @@ export class CommunityController {
     @Headers('x-user-id') userIdHeader?: string,
   ) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     const requestUserId = sessionUser?.id ?? userIdHeader;
     await this.communityService.deletePost(id, requestUserId);
     return { success: true };
@@ -196,7 +196,7 @@ export class CommunityController {
     @Body() body: CreateFriendRequestDto,
     @Headers('x-user-id') requesterIdHeader?: string,
   ) {
-    const requesterId = this.resolveAuthenticatedUserId(req, requesterIdHeader);
+    const requesterId = await this.resolveAuthenticatedUserId(req, requesterIdHeader);
     if (!requesterId) {
       throw new UnauthorizedException('login required to request friend');
     }
@@ -210,7 +210,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') currentUserIdHeader?: string,
   ) {
-    const currentUserId = this.resolveAuthenticatedUserId(req, currentUserIdHeader);
+    const currentUserId = await this.resolveAuthenticatedUserId(req, currentUserIdHeader);
     if (!currentUserId) {
       throw new UnauthorizedException('login required to accept friend request');
     }
@@ -224,7 +224,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') currentUserIdHeader?: string,
   ) {
-    const currentUserId = this.resolveAuthenticatedUserId(req, currentUserIdHeader);
+    const currentUserId = await this.resolveAuthenticatedUserId(req, currentUserIdHeader);
     if (!currentUserId) {
       throw new UnauthorizedException('login required to reject friend request');
     }
@@ -238,7 +238,7 @@ export class CommunityController {
     @Body() body: SendDirectMessageDto,
     @Headers('x-user-id') senderIdHeader?: string,
   ) {
-    const senderId = this.resolveAuthenticatedUserId(req, senderIdHeader);
+    const senderId = await this.resolveAuthenticatedUserId(req, senderIdHeader);
     if (!senderId) {
       throw new UnauthorizedException('login required to send direct message');
     }

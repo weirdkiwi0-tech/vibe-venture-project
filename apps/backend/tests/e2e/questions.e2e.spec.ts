@@ -291,18 +291,18 @@ describe('Questions API (e2e)', () => {
       grade: '2',
     });
 
-    const user1 = authService.signInWithGoogle({
+    const user1 = await authService.signInWithGoogle({
       googleId: `google-like-u1-${Date.now()}`,
       email: `like-u1-${Date.now()}@example.com`,
       displayName: 'Like User 1',
     });
-    const user2 = authService.signInWithGoogle({
+    const user2 = await authService.signInWithGoogle({
       googleId: `google-like-u2-${Date.now()}`,
       email: `like-u2-${Date.now()}@example.com`,
       displayName: 'Like User 2',
     });
-    const user1Session = authService.createSession(user1.user.id);
-    const user2Session = authService.createSession(user2.user.id);
+    const user1Session = await authService.createSession(user1.user.id);
+    const user2Session = await authService.createSession(user2.user.id);
 
     const first = await request(app.getHttpServer())
       .post(`/questions/${created.body.id}/like`)
@@ -354,18 +354,18 @@ describe('Questions API (e2e)', () => {
       grade: '1',
     });
 
-    const topUser1 = authService.signInWithGoogle({
+    const topUser1 = await authService.signInWithGoogle({
       googleId: `google-top-u1-${Date.now()}`,
       email: `top-u1-${Date.now()}@example.com`,
       displayName: 'Top User 1',
     });
-    const topUser2 = authService.signInWithGoogle({
+    const topUser2 = await authService.signInWithGoogle({
       googleId: `google-top-u2-${Date.now()}`,
       email: `top-u2-${Date.now()}@example.com`,
       displayName: 'Top User 2',
     });
-    const topUser1Session = authService.createSession(topUser1.user.id);
-    const topUser2Session = authService.createSession(topUser2.user.id);
+    const topUser1Session = await authService.createSession(topUser1.user.id);
+    const topUser2Session = await authService.createSession(topUser2.user.id);
 
     await request(app.getHttpServer())
       .post(`/questions/${low.body.id}/like`)
@@ -396,19 +396,19 @@ describe('Questions API (e2e)', () => {
       grade: '1',
     });
 
-    const reporter = authService.signInWithGoogle({
+    const reporter = await authService.signInWithGoogle({
       googleId: `google-reporter-${Date.now()}`,
       email: `reporter-${Date.now()}@example.com`,
       displayName: 'Reporter User',
     });
-    const another = authService.signInWithGoogle({
+    const another = await authService.signInWithGoogle({
       googleId: `google-another-${Date.now()}`,
       email: `another-${Date.now()}@example.com`,
       displayName: 'Another User',
     });
 
-    const reporterSession = authService.createSession(reporter.user.id);
-    const anotherSession = authService.createSession(another.user.id);
+    const reporterSession = await authService.createSession(reporter.user.id);
+    const anotherSession = await authService.createSession(another.user.id);
 
     const reportRes = await request(app.getHttpServer())
       .post('/reports')
@@ -434,5 +434,55 @@ describe('Questions API (e2e)', () => {
     expect(anotherList.status).toBe(200);
     expect(reporterList.body.some((item: { id: string }) => item.id === created.body.id)).toBe(false);
     expect(anotherList.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
+  });
+
+  it('GET /questions follows top policy as popular 7 plus help-needed 3', async () => {
+    const likeCounts = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0];
+    const createdQuestions: Array<{ id: string; title: string }> = [];
+
+    for (let i = 0; i < likeCounts.length; i += 1) {
+      const created = await request(app.getHttpServer()).post('/questions').send({
+        title: `e2e-policy-${i}`,
+        body: 'body',
+        subject: 'MATH',
+        grade: '1',
+      });
+
+      createdQuestions.push({ id: created.body.id, title: created.body.title });
+
+      for (let j = 0; j < likeCounts[i]; j += 1) {
+        const user = await authService.signInWithGoogle({
+          googleId: `google-e2e-policy-${i}-${j}-${Date.now()}`,
+          email: `e2e-policy-${i}-${j}-${Date.now()}@example.com`,
+          displayName: `E2E Policy ${i}-${j}`,
+        });
+        const sessionId = await authService.createSession(user.user.id);
+
+        await request(app.getHttpServer())
+          .post(`/questions/${created.body.id}/like`)
+          .set('Cookie', [`keepit-session=${sessionId}`]);
+      }
+    }
+
+    const res = await request(app.getHttpServer()).get('/questions');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(10);
+
+    expect(res.body.slice(0, 7).map((item: { title: string }) => item.title)).toEqual([
+      'e2e-policy-0',
+      'e2e-policy-1',
+      'e2e-policy-2',
+      'e2e-policy-3',
+      'e2e-policy-4',
+      'e2e-policy-5',
+      'e2e-policy-6',
+    ]);
+    expect(res.body.slice(7).map((item: { title: string }) => item.title).sort()).toEqual([
+      'e2e-policy-10',
+      'e2e-policy-11',
+      'e2e-policy-12',
+    ]);
+
+    expect(createdQuestions).toHaveLength(13);
   });
 });

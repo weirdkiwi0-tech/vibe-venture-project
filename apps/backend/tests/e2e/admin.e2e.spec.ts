@@ -9,9 +9,9 @@ describe('Admin API (e2e)', () => {
   let app: INestApplication;
   let authService: AuthService;
 
-  function createAdminSession() {
+  async function createAdminSession() {
     process.env.GOOGLE_ADMIN_EMAILS = 'admin-e2e@example.com';
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: `admin-e2e-${Date.now()}`,
       email: 'admin-e2e@example.com',
       displayName: 'Admin E2E',
@@ -49,7 +49,7 @@ describe('Admin API (e2e)', () => {
   });
 
   it('GET /admin/overview -> 200 with admin role', async () => {
-    const adminSession = createAdminSession();
+    const adminSession = await createAdminSession();
 
     await request(app.getHttpServer()).post('/reports').send({
       targetType: 'question',

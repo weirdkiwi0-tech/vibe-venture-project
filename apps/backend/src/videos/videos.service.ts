@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { TableClient } from '@azure/data-tables';
 import { randomUUID } from 'crypto';
 import { AuthService } from '../auth';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { VideoEntity } from './entities/video.entity';
 import { VIDEO_REPOSITORY, VideoRepository } from './videos.repository';
@@ -22,13 +23,39 @@ export interface VideoCommentItem {
 @Injectable()
 export class VideosService {
   private readonly likesByVideoId = new Map<string, Set<string>>();
+  private readonly commentsByVideoId = new Map<string, VideoCommentItem[]>();
+  private readonly commentLikesByCommentId = new Map<string, Set<string>>();
+  private readonly useTableStorage = Boolean(process.env.AZURE_TABLES_CONNECTION_STRING);
+  private commentsClient?: TableClient;
+  private commentLikesClient?: TableClient;
+  private ready?: Promise<void>;
 
   constructor(
     @Inject(VIDEO_REPOSITORY)
     private readonly videoRepository: VideoRepository,
-    @Optional() private readonly databaseService?: DatabaseService,
     @Optional() private readonly authService?: AuthService,
+    @Optional() private readonly legacyAuthService?: AuthService,
   ) {}
+
+  private async ensureReady() {
+    if (!this.useTableStorage) {
+      return;
+    }
+
+    if (!this.ready) {
+      this.commentsClient = getTableClient('VIDEO_COMMENTS_TABLE_NAME', 'videocomments');
+      this.commentLikesClient = getTableClient('VIDEO_COMMENT_LIKES_TABLE_NAME', 'videocommentlikes');
+      this.ready = Promise.all([
+        ensureTable(this.commentsClient),
+        ensureTable(this.commentLikesClient),
+      ]).then(() => undefined);
+    }
+    await this.ready;
+  }
+
+  private getAuthService(): AuthService | undefined {
+    return this.authService ?? this.legacyAuthService;
+  }
 
   async create(input: CreateVideoDto, uploaderId = 'anonymous-user') {
     const video = VideoEntity.create({
@@ -183,54 +210,51 @@ export class VideosService {
   }
 
   async listComments(videoId: string): Promise<VideoCommentItem[]> {
+    await this.ensureReady();
     await this.findById(videoId);
-    const db = this.databaseService?.getDatabase();
-    if (!db) {
-      return [];
+
+    if (!this.useTableStorage) {
+      const comments = this.commentsByVideoId.get(videoId) ?? [];
+      return [...comments].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }
 
-    const rows = db
-      .prepare(`
-        SELECT
-          vc.id,
-          vc.videoId,
-          vc.authorId,
-          vc.authorVisibility,
-          vc.content,
-          vc.createdAt,
-          COUNT(vcl.id) AS likeCount
-        FROM video_comments vc
-        LEFT JOIN video_comment_likes vcl ON vcl.commentId = vc.id
-        WHERE vc.videoId = ?
-        GROUP BY vc.id, vc.videoId, vc.authorId, vc.authorVisibility, vc.content, vc.createdAt
-        ORDER BY vc.createdAt ASC
-      `)
-      .all(videoId) as Array<{ id: string; videoId: string; authorId: string; authorVisibility: 'nickname' | 'anonymous'; content: string; createdAt: string; likeCount: number }>;
+    const escapedVideoId = escapeOdataString(videoId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.commentsClient!,
+      `partitionKey eq 'videocomments' and videoId eq '${escapedVideoId}'`,
+    );
 
-    return rows.map((row) => ({
-      id: row.id,
-      videoId: row.videoId,
-      authorId: row.authorId,
-      authorVisibility: row.authorVisibility ?? 'nickname',
-      authorName: row.authorVisibility === 'anonymous' ? '익명' : this.resolveAuthorName(row.authorId),
-      authorAvatar: row.authorVisibility === 'anonymous' ? '익' : this.resolveAuthorAvatar(row.authorId),
-      authorPhotoUrl: row.authorVisibility === 'anonymous' ? undefined : this.resolveAuthorPhotoUrl(row.authorId),
-      content: row.content,
-      createdAt: new Date(row.createdAt),
-      likeCount: Number(row.likeCount ?? 0),
+    const comments = await Promise.all(rows.map(async (row) => {
+      const commentId = String(row.rowKey ?? row.id);
+      const escapedCommentId = escapeOdataString(commentId);
+      const likes = await listAllEntities<Record<string, unknown>>(
+        this.commentLikesClient!,
+        `partitionKey eq 'videocommentlikes' and commentId eq '${escapedCommentId}'`,
+      );
+
+      return {
+        id: commentId,
+        videoId: String(row.videoId),
+        authorId: String(row.authorId),
+        authorVisibility: (String(row.authorVisibility ?? 'nickname') as 'nickname' | 'anonymous'),
+        authorName: String(row.authorVisibility) === 'anonymous' ? '익명' : await this.resolveAuthorName(String(row.authorId)),
+        authorAvatar: String(row.authorVisibility) === 'anonymous' ? '익' : await this.resolveAuthorAvatar(String(row.authorId)),
+        authorPhotoUrl: String(row.authorVisibility) === 'anonymous' ? undefined : await this.resolveAuthorPhotoUrl(String(row.authorId)),
+        content: String(row.content),
+        createdAt: new Date(String(row.createdAt)),
+        likeCount: likes.length,
+      };
     }));
+
+    return comments.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   async createComment(videoId: string, input: { content: string; authorVisibility?: 'nickname' | 'anonymous' }, authorId: string): Promise<VideoCommentItem> {
+    await this.ensureReady();
     await this.findById(videoId);
     const content = input.content.trim();
     if (!content) {
       throw new BadRequestException('content is required');
-    }
-
-    const db = this.databaseService?.getDatabase();
-    if (!db) {
-      throw new BadRequestException('database unavailable');
     }
 
     const comment: VideoCommentItem = {
@@ -238,60 +262,97 @@ export class VideosService {
       videoId,
       authorId,
       authorVisibility: input.authorVisibility ?? 'nickname',
-      authorName: input.authorVisibility === 'anonymous' ? '익명' : this.resolveAuthorName(authorId),
-      authorAvatar: input.authorVisibility === 'anonymous' ? '익' : this.resolveAuthorAvatar(authorId),
-      authorPhotoUrl: input.authorVisibility === 'anonymous' ? undefined : this.resolveAuthorPhotoUrl(authorId),
+      authorName: input.authorVisibility === 'anonymous' ? '익명' : await this.resolveAuthorName(authorId),
+      authorAvatar: input.authorVisibility === 'anonymous' ? '익' : await this.resolveAuthorAvatar(authorId),
+      authorPhotoUrl: input.authorVisibility === 'anonymous' ? undefined : await this.resolveAuthorPhotoUrl(authorId),
       content,
       createdAt: new Date(),
       likeCount: 0,
     };
 
-    db.prepare(
-      'INSERT INTO video_comments (id, videoId, authorId, authorVisibility, content, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(comment.id, comment.videoId, comment.authorId, comment.authorVisibility, comment.content, comment.createdAt.toISOString());
+    if (!this.useTableStorage) {
+      const comments = this.commentsByVideoId.get(videoId) ?? [];
+      comments.push(comment);
+      this.commentsByVideoId.set(videoId, comments);
+      return comment;
+    }
+
+    await this.commentsClient!.upsertEntity({
+      partitionKey: 'videocomments',
+      rowKey: comment.id,
+      videoId: comment.videoId,
+      authorId: comment.authorId,
+      authorVisibility: comment.authorVisibility,
+      content: comment.content,
+      createdAt: comment.createdAt.toISOString(),
+    }, 'Replace');
 
     return comment;
   }
 
   async likeComment(videoId: string, commentId: string, userId: string): Promise<{ likeCount: number; liked: boolean }> {
+    await this.ensureReady();
     await this.findById(videoId);
-    const db = this.databaseService?.getDatabase();
-    if (!db) {
-      throw new BadRequestException('database unavailable');
+
+    if (!this.useTableStorage) {
+      const comments = this.commentsByVideoId.get(videoId) ?? [];
+      if (!comments.some((item) => item.id === commentId)) {
+        throw new NotFoundException('comment not found');
+      }
+
+      const likes = this.commentLikesByCommentId.get(commentId) ?? new Set<string>();
+      if (likes.has(userId)) {
+        likes.delete(userId);
+        this.commentLikesByCommentId.set(commentId, likes);
+        const comment = comments.find((item) => item.id === commentId);
+        if (comment) {
+          comment.likeCount = likes.size;
+        }
+        return { likeCount: likes.size, liked: false };
+      }
+
+      likes.add(userId);
+      this.commentLikesByCommentId.set(commentId, likes);
+      const comment = comments.find((item) => item.id === commentId);
+      if (comment) {
+        comment.likeCount = likes.size;
+      }
+      return { likeCount: likes.size, liked: true };
     }
 
-    const comment = db.prepare('SELECT id FROM video_comments WHERE id = ? AND videoId = ?').get(
-      commentId,
-      videoId,
-    ) as { id: string } | undefined;
-    if (!comment) {
+    const comment = await this.commentsClient!.getEntity<Record<string, unknown>>('videocomments', commentId).catch(() => undefined);
+    if (!comment || String(comment.videoId) !== videoId) {
       throw new NotFoundException('comment not found');
     }
 
-    const existing = db.prepare('SELECT id FROM video_comment_likes WHERE commentId = ? AND userId = ?').get(
-      commentId,
-      userId,
-    ) as { id: string } | undefined;
+    const likeRowKey = `${commentId}::${userId}`;
+    const existing = await this.commentLikesClient!.getEntity('videocommentlikes', likeRowKey).catch(() => undefined);
 
     if (existing) {
-      db.prepare('DELETE FROM video_comment_likes WHERE id = ?').run(existing.id);
+      await this.commentLikesClient!.deleteEntity('videocommentlikes', likeRowKey).catch(() => undefined);
     } else {
-      db.prepare('INSERT INTO video_comment_likes (id, commentId, userId, createdAt) VALUES (?, ?, ?, ?)').run(
-        randomUUID(),
+      await this.commentLikesClient!.upsertEntity({
+        partitionKey: 'videocommentlikes',
+        rowKey: likeRowKey,
         commentId,
         userId,
-        new Date().toISOString(),
-      );
+        createdAt: new Date().toISOString(),
+      }, 'Replace');
     }
 
-    const row = db.prepare('SELECT COUNT(*) AS count FROM video_comment_likes WHERE commentId = ?').get(commentId) as { count: number };
-    return { likeCount: Number(row.count ?? 0), liked: !existing };
+    const escapedCommentId = escapeOdataString(commentId);
+    const likes = await listAllEntities<Record<string, unknown>>(
+      this.commentLikesClient!,
+      `partitionKey eq 'videocommentlikes' and commentId eq '${escapedCommentId}'`,
+    );
+    return { likeCount: likes.length, liked: !existing };
   }
 
   async deleteById(id: string, requestUserId: string) {
     const video = await this.findById(id);
 
-    const requester = this.authService?.getUserById(requestUserId);
+    const authService = this.getAuthService();
+    const requester = authService ? await authService.getUserById(requestUserId) : undefined;
     const isAdmin = requester?.role === 'admin';
 
     if (video.uploaderId !== requestUserId && !isAdmin) {
@@ -300,26 +361,51 @@ export class VideosService {
 
     await this.videoRepository.deleteById(id);
 
-    const db = this.databaseService?.getDatabase();
-    if (db) {
-      db.prepare('DELETE FROM video_comments WHERE videoId = ?').run(id);
+    if (!this.useTableStorage) {
+      const comments = this.commentsByVideoId.get(id) ?? [];
+      for (const comment of comments) {
+        this.commentLikesByCommentId.delete(comment.id);
+      }
+      this.commentsByVideoId.delete(id);
+      return;
     }
+
+    const escapedVideoId = escapeOdataString(id);
+    const comments = await listAllEntities<Record<string, unknown>>(
+      this.commentsClient!,
+      `partitionKey eq 'videocomments' and videoId eq '${escapedVideoId}'`,
+    );
+
+    await Promise.all(comments.map(async (comment) => {
+      const commentId = String(comment.rowKey ?? comment.id);
+      await this.commentsClient!.deleteEntity('videocomments', commentId).catch(() => undefined);
+      const escapedCommentId = escapeOdataString(commentId);
+      const likes = await listAllEntities<Record<string, unknown>>(
+        this.commentLikesClient!,
+        `partitionKey eq 'videocommentlikes' and commentId eq '${escapedCommentId}'`,
+      );
+      await Promise.all(likes.map((like) => this.commentLikesClient!.deleteEntity('videocommentlikes', String(like.rowKey ?? like.id)).catch(() => undefined)));
+    }));
   }
 
   private shouldIncreaseViewCount(viewerId?: string): boolean {
     return true;
   }
 
-  private resolveAuthorName(authorId: string) {
-    return this.authService?.getUserById(authorId)?.displayName ?? '알 수 없음';
+  private async resolveAuthorName(authorId: string) {
+    const authService = this.getAuthService();
+    const user = authService ? await authService.getUserById(authorId) : undefined;
+    return user?.displayName ?? '알 수 없음';
   }
 
-  private resolveAuthorAvatar(authorId: string) {
-    const name = this.resolveAuthorName(authorId).trim();
+  private async resolveAuthorAvatar(authorId: string) {
+    const name = (await this.resolveAuthorName(authorId)).trim();
     return name ? name.slice(0, 1).toUpperCase() : 'U';
   }
 
-  private resolveAuthorPhotoUrl(authorId: string) {
-    return this.authService?.getUserById(authorId)?.photoUrl ?? undefined;
+  private async resolveAuthorPhotoUrl(authorId: string) {
+    const authService = this.getAuthService();
+    const user = authService ? await authService.getUserById(authorId) : undefined;
+    return user?.photoUrl ?? undefined;
   }
 }

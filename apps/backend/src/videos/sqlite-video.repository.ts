@@ -1,70 +1,84 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
+import { TableClient } from '@azure/data-tables';
 import { VideoEntity } from './entities/video.entity';
 import { VideoRepository } from './videos.repository';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 
 @Injectable()
 export class SqliteVideoRepository implements VideoRepository {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('VIDEOS_TABLE_NAME', 'videos');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async save(video: VideoEntity): Promise<void> {
-    const stmt = this.getDb().prepare(`
-      INSERT OR REPLACE INTO videos (
-        id, uploaderId, title, subject, url, durationSeconds,
-        likeCount, viewCount, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      video.id,
-      video.uploaderId,
-      video.title,
-      video.subject,
-      video.url,
-      video.durationSeconds,
-      video.likeCount,
-      video.viewCount,
-      video.createdAt.toISOString(),
-    );
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'videos',
+      rowKey: video.id,
+      uploaderId: video.uploaderId,
+      title: video.title,
+      subject: video.subject,
+      url: video.url,
+      durationSeconds: video.durationSeconds,
+      likeCount: video.likeCount,
+      viewCount: video.viewCount,
+      createdAt: video.createdAt.toISOString(),
+    }, 'Replace');
   }
 
   async findById(id: string): Promise<VideoEntity | null> {
-    const stmt = this.getDb().prepare('SELECT * FROM videos WHERE id = ?');
-    const row = stmt.get(id) as any;
-
-    if (!row) return null;
-
-    return this.mapToEntity(row);
+    await this.ensureReady();
+    try {
+      const row = await this.client.getEntity<Record<string, unknown>>('videos', id);
+      return this.mapToEntity(row);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async listByUploaderId(uploaderId: string): Promise<VideoEntity[]> {
-    const stmt = this.getDb().prepare(
-      'SELECT * FROM videos WHERE uploaderId = ? ORDER BY createdAt DESC',
+    await this.ensureReady();
+    const escapedUploaderId = escapeOdataString(uploaderId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.client,
+      `partitionKey eq 'videos' and uploaderId eq '${escapedUploaderId}'`,
     );
-    const rows = stmt.all(uploaderId) as any[];
 
-    return rows.map((row) => this.mapToEntity(row));
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async listAll(): Promise<VideoEntity[]> {
-    const stmt = this.getDb().prepare('SELECT * FROM videos ORDER BY createdAt DESC');
-    const rows = stmt.all() as any[];
-
-    return rows.map((row) => this.mapToEntity(row));
+    await this.ensureReady();
+    const rows = await listAllEntities<Record<string, unknown>>(this.client, `partitionKey eq 'videos'`);
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async deleteById(id: string): Promise<void> {
-    const db = this.getDb();
-    const deleteTx = db.transaction(() => {
-      db.prepare('DELETE FROM video_comments WHERE videoId = ?').run(id);
-      db.prepare('DELETE FROM videos WHERE id = ?').run(id);
-    });
-    deleteTx();
+    await this.ensureReady();
+    try {
+      await this.client.deleteEntity('videos', id);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 404) {
+        throw error;
+      }
+    }
   }
 
   private mapToEntity(row: any): VideoEntity {

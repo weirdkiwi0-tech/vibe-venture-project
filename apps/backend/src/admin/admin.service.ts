@@ -46,8 +46,9 @@ export class AdminService {
     @Optional() @Inject(ANSWER_REPOSITORY) private readonly answerRepository?: AnswerRepository,
   ) {}
 
-  listUsers() {
-    return this.authService.listUsers().map((user) => ({
+  async listUsers() {
+    const users = await this.authService.listUsers();
+    return users.map((user) => ({
       id: user.id,
       email: user.email,
       displayName: user.displayName,
@@ -58,20 +59,20 @@ export class AdminService {
     }));
   }
 
-  deleteUser(userId: string) {
-    this.authService.deleteUser(userId);
+  async deleteUser(userId: string) {
+    await this.authService.deleteUser(userId);
   }
 
-  banUser(userId: string, banUntil: string) {
-    this.authService.banUser(userId, banUntil);
+  async banUser(userId: string, banUntil: string) {
+    await this.authService.banUser(userId, banUntil);
   }
 
-  unbanUser(userId: string) {
-    this.authService.unbanUser(userId);
+  async unbanUser(userId: string) {
+    await this.authService.unbanUser(userId);
   }
 
-  updateUserRole(userId: string, role: 'user' | 'admin') {
-    this.authService.updateUserRole(userId, role);
+  async updateUserRole(userId: string, role: 'user' | 'admin') {
+    await this.authService.updateUserRole(userId, role);
   }
 
   async getOverview(): Promise<AdminOverviewResult> {

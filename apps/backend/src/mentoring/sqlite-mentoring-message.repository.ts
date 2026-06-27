@@ -1,70 +1,88 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
+import { TableClient } from '@azure/data-tables';
 import { MentoringMessageEntity } from './entities/mentoring-message.entity';
 import { MentoringMessageRepository } from './mentoring-message.repository';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 
 @Injectable()
 export class SqliteMentoringMessageRepository
   implements MentoringMessageRepository
 {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('MENTORING_MESSAGES_TABLE_NAME', 'mentoringmessages');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
   }
 
   async save(message: MentoringMessageEntity): Promise<void> {
-    const stmt = this.getDb().prepare(`
-      INSERT OR REPLACE INTO mentoring_messages (
-        id, sessionId, authorId, content, createdAt
-      ) VALUES (?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      message.id,
-      message.sessionId,
-      message.sender, // Using sender as authorId for now
-      message.content,
-      message.createdAt.toISOString(),
-    );
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'mentoringmessages',
+      rowKey: message.id,
+      sessionId: message.sessionId,
+      sender: message.sender,
+      content: message.content,
+      createdAt: message.createdAt.toISOString(),
+    }, 'Replace');
   }
 
   async findById(id: string): Promise<MentoringMessageEntity | null> {
-    const stmt = this.getDb().prepare('SELECT * FROM mentoring_messages WHERE id = ?');
-    const row = stmt.get(id) as any;
-
-    if (!row) return null;
-
-    return this.mapToEntity(row);
+    await this.ensureReady();
+    try {
+      const row = await this.client.getEntity<Record<string, unknown>>('mentoringmessages', id);
+      return this.mapToEntity(row);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async findBySessionId(sessionId: string): Promise<MentoringMessageEntity[]> {
-    const stmt = this.getDb().prepare(
-      'SELECT * FROM mentoring_messages WHERE sessionId = ? ORDER BY createdAt ASC',
+    await this.ensureReady();
+    const escapedSessionId = escapeOdataString(sessionId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.client,
+      `partitionKey eq 'mentoringmessages' and sessionId eq '${escapedSessionId}'`,
     );
-    const rows = stmt.all(sessionId) as any[];
 
-    return rows.map((row) => this.mapToEntity(row));
+    return rows
+      .map((row) => this.mapToEntity(row))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   async deleteById(id: string): Promise<void> {
-    const stmt = this.getDb().prepare('DELETE FROM mentoring_messages WHERE id = ?');
-    stmt.run(id);
+    await this.ensureReady();
+    try {
+      await this.client.deleteEntity('mentoringmessages', id);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 404) {
+        throw error;
+      }
+    }
   }
 
   async deleteBySessionId(sessionId: string): Promise<void> {
-    const stmt = this.getDb().prepare('DELETE FROM mentoring_messages WHERE sessionId = ?');
-    stmt.run(sessionId);
+    const rows = await this.findBySessionId(sessionId);
+    await Promise.all(rows.map((row) => this.deleteById(row.id)));
   }
 
   private mapToEntity(row: any): MentoringMessageEntity {
     return MentoringMessageEntity.create({
-      id: row.id,
-      sessionId: row.sessionId,
-      sender: row.authorId as 'learner' | 'mentor',
-      content: row.content,
-      createdAt: new Date(row.createdAt),
+      id: String(row.rowKey ?? row.id),
+      sessionId: String(row.sessionId),
+      sender: String(row.sender) as 'learner' | 'mentor',
+      content: String(row.content),
+      createdAt: new Date(String(row.createdAt)),
     });
   }
 }

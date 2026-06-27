@@ -10,15 +10,15 @@ export class HomeController {
     private readonly authService: AuthService,
   ) {}
 
-  private resolveViewerId(req: Request, headerUserId?: string) {
+  private async resolveViewerId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     return sessionUser?.id ?? headerUserId;
   }
 
   @Get()
   async getHomeFeed(@Req() req: Request, @Headers('x-user-id') userIdHeader: string | undefined) {
-    const viewerId = this.resolveViewerId(req, userIdHeader);
+    const viewerId = await this.resolveViewerId(req, userIdHeader);
     const { videos, questions, generatedAt } = await this.homeService.getHomeFeed(viewerId);
 
     return {

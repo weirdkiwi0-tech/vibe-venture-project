@@ -13,9 +13,9 @@ export class VideosController {
     private readonly authService: AuthService,
   ) {}
 
-  private resolveAuthenticatedUserId(req: Request, headerUserId?: string) {
+  private async resolveAuthenticatedUserId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     if (sessionUser) {
       return sessionUser.id;
     }
@@ -24,13 +24,13 @@ export class VideosController {
       return undefined;
     }
 
-    const headerUser = this.authService.getUserById(headerUserId);
+    const headerUser = await this.authService.getUserById(headerUserId);
     return headerUser?.id;
   }
 
-  private resolveViewerId(req: Request, headerUserId?: string) {
+  private async resolveViewerId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     return sessionUser?.id ?? headerUserId;
   }
 
@@ -130,7 +130,7 @@ export class VideosController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const viewerId = this.resolveAuthenticatedUserId(req, userIdHeader);
+    const viewerId = await this.resolveAuthenticatedUserId(req, userIdHeader);
     const video = await this.videosService.incrementView(id, viewerId);
     return {
       id: video.id,
@@ -163,7 +163,7 @@ export class VideosController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveViewerId(req, userIdHeader);
+    const userId = await this.resolveViewerId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to comment');
     }
@@ -194,7 +194,7 @@ export class VideosController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const userId = this.resolveViewerId(req, userIdHeader);
+    const userId = await this.resolveViewerId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to like comment');
     }
@@ -220,7 +220,7 @@ export class VideosController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const requestUserId = this.resolveViewerId(req, userIdHeader) ?? 'anonymous-user';
+    const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
     await this.videosService.deleteById(id, requestUserId);
     return { success: true };
   }

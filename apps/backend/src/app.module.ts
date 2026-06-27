@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { AdminModule } from './admin';
 import { AuthModule } from './auth';
 import { CommunityModule } from './community';
-import { DatabaseService } from './db/database.service';
 import { MentoringModule } from './mentoring';
 import { HomeModule } from './home';
 import { QuestionsModule } from './questions';
@@ -22,6 +21,5 @@ import { VideosModule } from './videos';
     VideosModule,
     RewardsModule,
   ],
-  providers: [DatabaseService],
 })
 export class AppModule {}

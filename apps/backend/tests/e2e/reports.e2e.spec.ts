@@ -35,9 +35,9 @@ describe('Reports API (e2e)', () => {
     return answerRes.body.id as string;
   }
 
-  function createAdminSession() {
+  async function createAdminSession() {
     process.env.GOOGLE_ADMIN_EMAILS = 'reports-admin@example.com';
-    const login = authService.signInWithGoogle({
+    const login = await authService.signInWithGoogle({
       googleId: `reports-admin-${Date.now()}`,
       email: 'reports-admin@example.com',
       displayName: 'Reports Admin',
@@ -109,7 +109,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('POST /reports/:id/approve -> 200 and GET /reports/audit-logs -> 200', async () => {
-    const adminSession = createAdminSession();
+    const adminSession = await createAdminSession();
     const answerId = await createAnswerTarget();
 
     const created = await request(app.getHttpServer()).post('/reports').send({
@@ -136,7 +136,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('GET /reports/queue -> 200', async () => {
-    const adminSession = createAdminSession();
+    const adminSession = await createAdminSession();
     const questionId = await createQuestionTarget();
 
     await request(app.getHttpServer()).post('/reports').send({
@@ -162,7 +162,7 @@ describe('Reports API (e2e)', () => {
   });
 
   it('accepts community-post/comment reports and includes them in admin overview buckets', async () => {
-    const adminSession = createAdminSession();
+    const adminSession = await createAdminSession();
 
     const communityReport = await request(app.getHttpServer()).post('/reports').send({
       targetType: 'community-post',

@@ -21,18 +21,18 @@ describe('AuthService (integration)', () => {
     rmSync(`${testDbPath}-shm`, { force: true });
   });
 
-  it('keeps one user record per google account across repeated sign-ins', () => {
+  it('keeps one user record per google account across repeated sign-ins', async () => {
     process.env.GOOGLE_ADMIN_EMAILS = 'admin@example.com';
     const service = new AuthService();
 
-    const first = service.signInWithGoogle({
+    const first = await service.signInWithGoogle({
       googleId: 'google-123',
       email: 'admin@example.com',
       displayName: 'First Name',
       photoUrl: 'https://example.com/1.png',
     });
 
-    const second = service.signInWithGoogle({
+    const second = await service.signInWithGoogle({
       googleId: 'google-123',
       email: 'admin@example.com',
       displayName: 'Updated Name',
@@ -47,16 +47,16 @@ describe('AuthService (integration)', () => {
     expect(second.user.role).toBe('admin');
   });
 
-  it('resolves session owner across service boundaries', () => {
+  it('resolves session owner across service boundaries', async () => {
     const service = new AuthService();
-    const login = service.signInWithGoogle({
+    const login = await service.signInWithGoogle({
       googleId: 'google-999',
       email: 'user@example.com',
       displayName: 'User',
     });
 
-    const sessionId = service.createSession(login.user.id);
-    const user = service.getUserBySessionId(sessionId);
+    const sessionId = await service.createSession(login.user.id);
+    const user = await service.getUserBySessionId(sessionId);
 
     expect(user?.email).toBe('user@example.com');
     expect(user?.role).toBe('user');

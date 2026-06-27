@@ -10,7 +10,7 @@ export class RolesGuard implements CanActivate {
     private readonly authService: AuthService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLE_METADATA_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -26,7 +26,7 @@ export class RolesGuard implements CanActivate {
     }>();
 
     const sessionId = request.cookies?.['keepit-session'];
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     if (!sessionUser) {
       throw new ForbiddenException('authenticated session required');
     }

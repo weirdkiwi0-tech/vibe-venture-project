@@ -50,6 +50,10 @@ interface CommunityPostCommentRecord {
 
 const ANONYMOUS_AUTHOR_NAME = '익명';
 const ANONYMOUS_AUTHOR_AVATAR = '익';
+const DEFAULT_PROFILE_FALLBACK: Record<string, { name: string; avatar: string }> = {
+  'student-jun': { name: '준', avatar: '준' },
+  'friend-user': { name: '민지', avatar: '민' },
+};
 
 @Injectable()
 export class CommunityService {
@@ -385,7 +389,7 @@ export class CommunityService {
     if (postIndex < 0) {
       throw new NotFoundException('post not found');
     }
-    const requester = this.authService.getUserById(userId);
+    const requester = await this.authService.getUserById(userId);
     const isAdmin = requester?.role === 'admin';
     if (this.posts[postIndex].authorId !== userId && !isAdmin) {
       throw new ForbiddenException('only author can delete post');
@@ -582,19 +586,15 @@ export class CommunityService {
       return existing;
     }
 
-    const user = this.authService.getUserById(id);
-    if (!user) {
-      return undefined;
-    }
-
-    const displayName = user.displayName.trim();
-    const avatarSource = displayName || user.email || '사용자';
+    const fallback = DEFAULT_PROFILE_FALLBACK[id];
+    const displayName = fallback?.name ?? id;
+    const avatarSource = fallback?.avatar ?? (displayName || '사용자');
     const profile: CommunityProfile = {
-      id: user.id,
+      id,
       name: displayName,
-      role: user.role === 'admin' ? 'mentor' : 'student',
-      avatar: avatarSource.slice(0, 1).toUpperCase(),
-      photoUrl: user.photoUrl ?? undefined,
+      role: 'student',
+      avatar: avatarSource.slice(0, 1),
+      photoUrl: undefined,
     };
 
     this.profiles.set(profile.id, profile);

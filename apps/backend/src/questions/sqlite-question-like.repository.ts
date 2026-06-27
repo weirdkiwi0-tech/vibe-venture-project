@@ -1,52 +1,70 @@
 import { Injectable } from '@nestjs/common';
-import Database from 'better-sqlite3';
-import { randomUUID } from 'crypto';
+import { TableClient } from '@azure/data-tables';
 import { QuestionLikeRepository } from './question-like.repository';
-import { DatabaseService } from '../db/database.service';
+import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 
 @Injectable()
 export class SqliteQuestionLikeRepository implements QuestionLikeRepository {
-  constructor(private databaseService: DatabaseService) {}
+  private readonly client: TableClient;
+  private readonly ready: Promise<void>;
 
-  private getDb(): Database.Database {
-    return this.databaseService.getDatabase();
+  constructor() {
+    this.client = getTableClient('QUESTION_LIKES_TABLE_NAME', 'questionlikes');
+    this.ready = ensureTable(this.client);
+  }
+
+  private async ensureReady() {
+    await this.ready;
+  }
+
+  private getRowKey(questionId: string, userId: string): string {
+    return `${questionId}::${userId}`;
   }
 
   async hasUserLiked(questionId: string, userId: string): Promise<boolean> {
-    const stmt = this.getDb().prepare(
-      'SELECT 1 FROM question_likes WHERE questionId = ? AND userId = ?',
-    );
-    const result = stmt.get(questionId, userId);
-    return !!result;
-  }
-
-  async saveLike(questionId: string, userId: string): Promise<void> {
-    const id = randomUUID();
-    const createdAt = new Date().toISOString();
-
+    await this.ensureReady();
     try {
-      const stmt = this.getDb().prepare(`
-        INSERT INTO question_likes (id, questionId, userId, createdAt)
-        VALUES (?, ?, ?, ?)
-      `);
-      stmt.run(id, questionId, userId, createdAt);
+      await this.client.getEntity('questionlikes', this.getRowKey(questionId, userId));
+      return true;
     } catch (error) {
-      // Handle duplicate key error silently (user already liked)
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        return false;
+      }
+      throw error;
     }
   }
 
+  async saveLike(questionId: string, userId: string): Promise<void> {
+    await this.ensureReady();
+    await this.client.upsertEntity({
+      partitionKey: 'questionlikes',
+      rowKey: this.getRowKey(questionId, userId),
+      questionId,
+      userId,
+      createdAt: new Date().toISOString(),
+    }, 'Merge');
+  }
+
   async removeLike(questionId: string, userId: string): Promise<void> {
-    const stmt = this.getDb().prepare(
-      'DELETE FROM question_likes WHERE questionId = ? AND userId = ?',
-    );
-    stmt.run(questionId, userId);
+    await this.ensureReady();
+    try {
+      await this.client.deleteEntity('questionlikes', this.getRowKey(questionId, userId));
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode !== 404) {
+        throw error;
+      }
+    }
   }
 
   async countLikes(questionId: string): Promise<number> {
-    const stmt = this.getDb().prepare(
-      'SELECT COUNT(*) as count FROM question_likes WHERE questionId = ?',
+    await this.ensureReady();
+    const escapedQuestionId = escapeOdataString(questionId);
+    const rows = await listAllEntities<Record<string, unknown>>(
+      this.client,
+      `partitionKey eq 'questionlikes' and questionId eq '${escapedQuestionId}'`,
     );
-    const result = stmt.get(questionId) as any;
-    return result.count;
+    return rows.length;
   }
 }

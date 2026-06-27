@@ -22,9 +22,9 @@ export class QuestionsController {
     private readonly authService: AuthService,
   ) {}
 
-  private resolveViewerId(req: Request, headerUserId?: string) {
+  private async resolveViewerId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = this.authService.getUserBySessionId(sessionId);
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
     if (sessionUser) {
       return sessionUser.id;
     }
@@ -33,7 +33,7 @@ export class QuestionsController {
       return undefined;
     }
 
-    const headerUser = this.authService.getUserById(headerUserId);
+    const headerUser = await this.authService.getUserById(headerUserId);
     return headerUser?.id;
   }
 
@@ -104,7 +104,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader: string | undefined,
     @Query() query: { subject?: string; grade?: string; title?: string },
   ) {
-    const viewerId = this.resolveViewerId(req, userIdHeader);
+    const viewerId = await this.resolveViewerId(req, userIdHeader);
     const items = await this.questionsService.listTopQuestions(undefined, {
       subject: query.subject,
       grade: query.grade,
@@ -119,7 +119,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader: string | undefined,
     @Query() query: { subject?: string; grade?: string; title?: string },
   ) {
-    const viewerId = this.resolveViewerId(req, userIdHeader);
+    const viewerId = await this.resolveViewerId(req, userIdHeader);
     const items = await this.questionsService.listAllQuestions({
       subject: query.subject,
       grade: query.grade,
@@ -164,7 +164,7 @@ export class QuestionsController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader: string | undefined,
   ) {
-    const viewerId = this.resolveViewerId(req, userIdHeader);
+    const viewerId = await this.resolveViewerId(req, userIdHeader);
     return this.mapQuestionItem(await this.questionsService.findById(id, viewerId));
   }
 
@@ -176,7 +176,7 @@ export class QuestionsController {
   @Post(':id/like')
   async like(@Param('id') id: string, @Req() req: Request) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const user = this.authService.getUserBySessionId(sessionId);
+    const user = await this.authService.getUserBySessionId(sessionId);
     if (!user) {
       throw new UnauthorizedException('login required to like question');
     }
@@ -257,7 +257,7 @@ export class QuestionsController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const requestUserId = this.resolveViewerId(req, userIdHeader) ?? 'anonymous-user';
+    const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
     await this.questionsService.deleteById(id, requestUserId);
     return { success: true };
   }
@@ -268,7 +268,7 @@ export class QuestionsController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const requestUserId = this.resolveViewerId(req, userIdHeader) ?? 'anonymous-user';
+    const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
     await this.answersService.deleteById(answerId, requestUserId);
     return { success: true };
   }

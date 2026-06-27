@@ -118,7 +118,7 @@ export class AuthController {
     };
     let isNewUser: boolean;
     try {
-      const signInResult = this.authService.signInWithGoogle(oauthUser);
+      const signInResult = await this.authService.signInWithGoogle(oauthUser);
       user = signInResult.user;
       isNewUser = signInResult.isNewUser;
     } catch (error) {
@@ -126,7 +126,7 @@ export class AuthController {
       return res.redirect(this.buildFrontendCallbackUrl(req, false, message));
     }
 
-    const sessionId = this.authService.createSession(user.id);
+    const sessionId = await this.authService.createSession(user.id);
 
     const cookieBaseOptions = this.cookieBaseOptions(req);
 
@@ -146,7 +146,7 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const user = this.authService.getUserBySessionId(sessionId);
+    const user = await this.authService.getUserBySessionId(sessionId);
 
     if (!user) {
       return { isAuthenticated: false };
@@ -162,7 +162,7 @@ export class AuthController {
         role: user.role,
       },
       ban: {
-        ...this.authService.getBanInfoByUserId(user.id),
+        ...(await this.authService.getBanInfoByUserId(user.id)),
         logoutAfterSeconds: 10,
       },
     };
@@ -172,7 +172,7 @@ export class AuthController {
   async logout(@Req() req: Request, @Res() res: Response) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
     if (sessionId) {
-      this.authService.revokeSession(sessionId);
+      await this.authService.revokeSession(sessionId);
     }
 
     res.clearCookie('keepit-session', { path: '/' });
@@ -184,13 +184,13 @@ export class AuthController {
   @Post('signup')
   async signup(@Body() body: LocalSignUpDto, @Req() req: Request, @Res() res: Response) {
     try {
-      const { user } = this.authService.signUpLocal({
+      const { user } = await this.authService.signUpLocal({
         email: body.email,
         password: body.password,
         displayName: body.displayName,
         photoUrl: body.photoUrl,
       });
-      const sessionId = this.authService.createSession(user.id);
+      const sessionId = await this.authService.createSession(user.id);
 
       const cookieBaseOptions = this.cookieBaseOptions(req);
 
@@ -225,8 +225,8 @@ export class AuthController {
   @Post('signin')
   async signin(@Body() body: LocalSignInDto, @Req() req: Request, @Res() res: Response) {
     try {
-      const user = this.authService.signInLocal(body.email, body.password);
-      const sessionId = this.authService.createSession(user.id);
+      const user = await this.authService.signInLocal(body.email, body.password);
+      const sessionId = await this.authService.createSession(user.id);
 
       const cookieBaseOptions = this.cookieBaseOptions(req);
 
