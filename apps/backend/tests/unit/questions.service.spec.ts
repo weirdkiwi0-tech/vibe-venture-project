@@ -184,6 +184,111 @@ describe('QuestionsService (unit)', () => {
     expect(helpNeededTitles.sort()).toEqual(['policy-10', 'policy-11', 'policy-12']);
   });
 
+  it('applies strict top policy for exactly 10 questions with deterministic order', async () => {
+    const baseTime = Date.parse('2026-01-01T00:00:00.000Z');
+
+    const createPreset = async (
+      id: string,
+      score: { likeCount: number; viewCount: number },
+      status: 'open' | 'solved',
+      minuteOffset: number,
+    ) => {
+      await questionRepo.save(
+        QuestionEntity.create({
+          id,
+          authorId: 'author-1',
+          title: id,
+          body: 'body',
+          subject: 'MATH',
+          grade: '1',
+          status,
+          likeCount: score.likeCount,
+          viewCount: score.viewCount,
+          createdAt: new Date(baseTime + minuteOffset * 60_000),
+          updatedAt: new Date(baseTime + minuteOffset * 60_000),
+        }),
+      );
+    };
+
+    await createPreset('q-1', { likeCount: 7, viewCount: 1 }, 'open', 1);
+    await createPreset('q-2', { likeCount: 6, viewCount: 2 }, 'open', 2);
+    await createPreset('q-3', { likeCount: 5, viewCount: 3 }, 'open', 3);
+    await createPreset('q-4', { likeCount: 4, viewCount: 4 }, 'open', 4);
+    await createPreset('q-5', { likeCount: 3, viewCount: 5 }, 'open', 5);
+    await createPreset('q-6', { likeCount: 2, viewCount: 6 }, 'open', 6);
+    await createPreset('q-7', { likeCount: 1, viewCount: 7 }, 'open', 7);
+
+    await createPreset('q-8', { likeCount: 0, viewCount: 0 }, 'solved', 8);
+    await createPreset('q-9', { likeCount: 0, viewCount: 1 }, 'open', 9);
+    await createPreset('q-10', { likeCount: 0, viewCount: 2 }, 'open', 10);
+
+    const list = await service.listTopQuestions();
+
+    expect(list).toHaveLength(10);
+    expect(list.slice(0, 7).map((item) => item.question.id)).toEqual([
+      'q-7',
+      'q-6',
+      'q-5',
+      'q-4',
+      'q-3',
+      'q-2',
+      'q-1',
+    ]);
+
+    expect(list.slice(7).map((item) => item.question.id)).toEqual(['q-9', 'q-10', 'q-8']);
+  });
+
+  it('ranks popularity by likeCount + viewCount desc, then createdAt desc', async () => {
+    const olderHighScore = QuestionEntity.create({
+      id: 'score-older',
+      authorId: 'author-1',
+      title: 'score-older',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+      likeCount: 3,
+      viewCount: 10,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    const newerLowerLikeButHigherScore = QuestionEntity.create({
+      id: 'score-top',
+      authorId: 'author-1',
+      title: 'score-top',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+      likeCount: 2,
+      viewCount: 20,
+      createdAt: new Date('2026-01-01T00:05:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:05:00.000Z'),
+    });
+    const newerSameScore = QuestionEntity.create({
+      id: 'score-same-newer',
+      authorId: 'author-1',
+      title: 'score-same-newer',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+      likeCount: 5,
+      viewCount: 8,
+      createdAt: new Date('2026-01-01T00:10:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:10:00.000Z'),
+    });
+
+    await questionRepo.save(olderHighScore);
+    await questionRepo.save(newerLowerLikeButHigherScore);
+    await questionRepo.save(newerSameScore);
+
+    const list = await service.listTopQuestions(undefined);
+
+    expect(list.slice(0, 3).map((item) => item.question.id)).toEqual([
+      'score-top',
+      'score-same-newer',
+      'score-older',
+    ]);
+  });
+
   it('increases viewCount when viewer is not authenticated', async () => {
     const authServiceMock = {
       getUserById: (_id: string) => undefined,

@@ -116,7 +116,7 @@ export class QuestionsService {
     const byPopular = this.sortByPopularity(withCounts);
 
     if (typeof limit === 'number') {
-      if (limit === TOP_POLICY_LIMIT && byPopular.length > TOP_POLICY_LIMIT) {
+      if (limit === TOP_POLICY_LIMIT) {
         return this.applyTopPolicy(byPopular, withCounts);
       }
 
@@ -217,20 +217,54 @@ export class QuestionsService {
 
   private sortByPopularity(items: QuestionWithAnswerCount[]): QuestionWithAnswerCount[] {
     return [...items].sort((a, b) => {
-      if (b.question.likeCount !== a.question.likeCount) {
-        return b.question.likeCount - a.question.likeCount;
+      const scoreA = a.question.likeCount + a.question.viewCount;
+      const scoreB = b.question.likeCount + b.question.viewCount;
+
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
       }
-      return b.question.createdAt.getTime() - a.question.createdAt.getTime();
+
+      const createdAtDiff = this.compareCreatedAtDesc(a, b);
+      if (createdAtDiff !== 0) {
+        return createdAtDiff;
+      }
+
+      return this.compareIdAsc(a, b);
     });
   }
 
   private sortByHelpNeeded(items: QuestionWithAnswerCount[]): QuestionWithAnswerCount[] {
     return [...items].sort((a, b) => {
+      const statusPriorityA = a.question.status === 'open' ? 0 : 1;
+      const statusPriorityB = b.question.status === 'open' ? 0 : 1;
+
+      if (statusPriorityA !== statusPriorityB) {
+        return statusPriorityA - statusPriorityB;
+      }
+
       if (a.question.likeCount !== b.question.likeCount) {
         return a.question.likeCount - b.question.likeCount;
       }
-      return b.question.createdAt.getTime() - a.question.createdAt.getTime();
+
+      if (a.question.viewCount !== b.question.viewCount) {
+        return a.question.viewCount - b.question.viewCount;
+      }
+
+      const createdAtDiff = this.compareCreatedAtDesc(a, b);
+      if (createdAtDiff !== 0) {
+        return createdAtDiff;
+      }
+
+      return this.compareIdAsc(a, b);
     });
+  }
+
+  private compareCreatedAtDesc(a: QuestionWithAnswerCount, b: QuestionWithAnswerCount): number {
+    return b.question.createdAt.getTime() - a.question.createdAt.getTime();
+  }
+
+  private compareIdAsc(a: QuestionWithAnswerCount, b: QuestionWithAnswerCount): number {
+    return a.question.id.localeCompare(b.question.id);
   }
 
   private applyTopPolicy(
