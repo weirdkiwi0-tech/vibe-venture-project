@@ -71,4 +71,57 @@ describe('MentoringService (unit)', () => {
     expect(breaches).toHaveLength(1);
     expect(breaches[0].isSlaBreached).toBe(true);
   });
+
+  it('keeps firstMentorResponseAt at first mentor message and never sets it for learner messages', async () => {
+    const session = await service.createSession({ question: 'first mentor response contract' });
+
+    await service.sendMessage(session.id, {
+      sender: 'learner',
+      content: 'learner before mentor',
+    });
+
+    const afterLearner = await service.findSessionById(session.id);
+    expect(afterLearner.session.firstMentorResponseAt).toBeNull();
+
+    const firstMentorMessage = await service.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'first mentor response',
+    });
+
+    const afterFirstMentor = await service.findSessionById(session.id);
+    expect(afterFirstMentor.session.firstMentorResponseAt?.toISOString()).toBe(
+      firstMentorMessage.createdAt.toISOString(),
+    );
+
+    await service.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'second mentor response',
+    });
+
+    const afterSecondMentor = await service.findSessionById(session.id);
+    expect(afterSecondMentor.session.firstMentorResponseAt?.toISOString()).toBe(
+      firstMentorMessage.createdAt.toISOString(),
+    );
+  });
+
+  it('persists firstMentorResponseAt only on first mentor message', async () => {
+    const sessionRepository = new InMemoryMentoringSessionRepository();
+    const messageRepository = new InMemoryMentoringMessageRepository();
+    const localService = new MentoringService(sessionRepository, messageRepository);
+    const saveSpy = jest.spyOn(sessionRepository, 'save');
+
+    const session = await localService.createSession({ question: 'save once contract' });
+
+    await localService.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'first mentor',
+    });
+
+    await localService.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'second mentor',
+    });
+
+    expect(saveSpy).toHaveBeenCalledTimes(2);
+  });
 });

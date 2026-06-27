@@ -47,4 +47,38 @@ describe('MentoringService + Repository (integration)', () => {
     expect(breaches).toHaveLength(1);
     expect(breaches[0].id).toBe('breach-session');
   });
+
+  it('records firstMentorResponseAt from first mentor message only', async () => {
+    const service = new MentoringService(
+      new InMemoryMentoringSessionRepository(),
+      new InMemoryMentoringMessageRepository(),
+    );
+
+    const session = await service.createSession({
+      question: 'first mentor response integration contract',
+    });
+
+    await service.sendMessage(session.id, {
+      sender: 'learner',
+      content: 'learner message',
+    });
+
+    const afterLearner = await service.findSessionById(session.id);
+    expect(afterLearner.session.firstMentorResponseAt).toBeNull();
+
+    const firstMentor = await service.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'first mentor message',
+    });
+
+    await service.sendMessage(session.id, {
+      sender: 'mentor',
+      content: 'second mentor message',
+    });
+
+    const found = await service.findSessionById(session.id);
+    expect(found.session.firstMentorResponseAt?.toISOString()).toBe(
+      firstMentor.createdAt.toISOString(),
+    );
+  });
 });

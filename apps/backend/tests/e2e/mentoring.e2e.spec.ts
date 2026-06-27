@@ -125,4 +125,41 @@ describe('Mentoring API (e2e)', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.some((item: { id: string }) => item.id === session.body.id)).toBe(false);
   });
+
+  it('keeps firstMentorResponseAt at first mentor message and ignores learner messages', async () => {
+    const createRes = await request(app.getHttpServer())
+      .post('/mentoring/sessions')
+      .send({ question: 'first mentor response e2e contract' });
+
+    expect(createRes.status).toBe(201);
+    const sessionId = createRes.body.id;
+
+    const learnerRes = await request(app.getHttpServer())
+      .post(`/mentoring/sessions/${sessionId}/messages`)
+      .send({ sender: 'learner', content: 'learner first' });
+    expect(learnerRes.status).toBe(201);
+
+    const afterLearnerRes = await request(app.getHttpServer()).get(
+      `/mentoring/sessions/${sessionId}`,
+    );
+    expect(afterLearnerRes.status).toBe(200);
+    expect(afterLearnerRes.body.firstMentorResponseAt).toBeNull();
+
+    const firstMentorRes = await request(app.getHttpServer())
+      .post(`/mentoring/sessions/${sessionId}/messages`)
+      .send({ sender: 'mentor', content: 'first mentor' });
+    expect(firstMentorRes.status).toBe(201);
+
+    const secondMentorRes = await request(app.getHttpServer())
+      .post(`/mentoring/sessions/${sessionId}/messages`)
+      .send({ sender: 'mentor', content: 'second mentor' });
+    expect(secondMentorRes.status).toBe(201);
+
+    const afterMentorRes = await request(app.getHttpServer()).get(
+      `/mentoring/sessions/${sessionId}`,
+    );
+
+    expect(afterMentorRes.status).toBe(200);
+    expect(afterMentorRes.body.firstMentorResponseAt).toBe(firstMentorRes.body.createdAt);
+  });
 });

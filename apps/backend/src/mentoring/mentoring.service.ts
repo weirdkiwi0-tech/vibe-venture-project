@@ -50,7 +50,7 @@ export class MentoringService {
 
     await this.messageRepository.save(message);
 
-    if (input.sender === 'mentor') {
+    if (input.sender === 'mentor' && !session.firstMentorResponseAt) {
       const updatedSession = session.markFirstMentorResponse(message.createdAt);
       await this.sessionRepository.save(updatedSession);
     }
