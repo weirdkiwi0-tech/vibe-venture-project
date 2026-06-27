@@ -150,10 +150,17 @@ export class ReportsService {
     return row?.authorId ? String(row.authorId) : null;
   }
 
-  async listQueue(statuses: Array<'pending' | 'reviewing'> = ['pending', 'reviewing']) {
+  async listQueue(statuses: string[] = ['pending', 'reviewing']) {
     const reports = await this.reportRepository.listAll();
+    const queueStatuses: Array<'pending' | 'reviewing'> = ['pending', 'reviewing'];
+    const allowedStatuses = new Set<string>(queueStatuses);
+    const selectedStatuses = statuses.filter(
+      (status): status is 'pending' | 'reviewing' => allowedStatuses.has(status),
+    );
+    const effectiveStatuses = selectedStatuses.length > 0 ? selectedStatuses : queueStatuses;
+
     return reports
-      .filter((report) => statuses.includes(report.status as 'pending' | 'reviewing'))
+      .filter((report) => effectiveStatuses.includes(report.status as 'pending' | 'reviewing'))
       .sort((a, b) => {
         if (a.severity !== b.severity) {
           return a.severity === 'high' ? -1 : 1;

@@ -201,4 +201,91 @@ describe('Reports API (e2e)', () => {
       ]),
     );
   });
+
+  it('fixes queue contract: pending/reviewing only, high before normal, oldest first, terminal states excluded', async () => {
+    const adminSession = await createAdminSession();
+    const testTag = `queue-contract-${Date.now()}`;
+
+    const highOlderTarget = await createQuestionTarget();
+    const highNewerTarget = await createQuestionTarget();
+    const normalOlderTarget = await createQuestionTarget();
+    const resolvedTarget = await createQuestionTarget();
+    const rejectedTarget = await createQuestionTarget();
+    const restoredTarget = await createQuestionTarget();
+
+    const highOlder = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: highOlderTarget,
+      reason: `${testTag}-high-older`,
+      severity: 'high',
+    });
+    const normalOlder = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: normalOlderTarget,
+      reason: `${testTag}-normal-older`,
+      severity: 'normal',
+    });
+    const highNewer = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: highNewerTarget,
+      reason: `${testTag}-high-newer`,
+      severity: 'high',
+    });
+    const resolved = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: resolvedTarget,
+      reason: `${testTag}-resolved`,
+      severity: 'high',
+    });
+    const rejected = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: rejectedTarget,
+      reason: `${testTag}-rejected`,
+      severity: 'high',
+    });
+    const restored = await request(app.getHttpServer()).post('/reports').send({
+      targetType: 'question',
+      targetId: restoredTarget,
+      reason: `${testTag}-restored`,
+      severity: 'high',
+    });
+
+    expect(highOlder.status).toBe(201);
+    expect(highNewer.status).toBe(201);
+    expect(normalOlder.status).toBe(201);
+    expect(resolved.status).toBe(201);
+    expect(rejected.status).toBe(201);
+    expect(restored.status).toBe(201);
+
+    const resolvedResult = await request(app.getHttpServer())
+      .post(`/reports/${resolved.body.id}/approve`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: `${testTag}-approve` });
+    const rejectedResult = await request(app.getHttpServer())
+      .post(`/reports/${rejected.body.id}/reject`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: `${testTag}-reject` });
+    const restoredResult = await request(app.getHttpServer())
+      .post(`/reports/${restored.body.id}/restore`)
+      .set('Cookie', [`keepit-session=${adminSession}`])
+      .send({ reason: `${testTag}-restore` });
+
+    expect(resolvedResult.status).toBe(201);
+    expect(rejectedResult.status).toBe(201);
+    expect(restoredResult.status).toBe(201);
+
+    const queueRes = await request(app.getHttpServer())
+      .get('/reports/queue?status=resolved,rejected,restored,pending,reviewing')
+      .set('Cookie', [`keepit-session=${adminSession}`]);
+
+    expect(queueRes.status).toBe(200);
+
+    const contractQueue = queueRes.body.filter((report: { reason: string }) => report.reason.startsWith(testTag));
+
+    expect(contractQueue.map((report: { id: string }) => report.id)).toEqual([
+      highOlder.body.id,
+      highNewer.body.id,
+      normalOlder.body.id,
+    ]);
+  });
 });
