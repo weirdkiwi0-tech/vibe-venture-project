@@ -20,7 +20,7 @@ describe('VideosService + Repository (integration)', () => {
     expect(list).toHaveLength(2);
   });
 
-  it('returns guest policy with login requirement at 50 percent', async () => {
+  it('returns guest policy boundary behavior at 49.9, 50, and 50.1', async () => {
     const service = new VideosService(new InMemoryVideoRepository());
     const video = await service.create({
       title: 'gating test',
@@ -28,9 +28,53 @@ describe('VideosService + Repository (integration)', () => {
       durationSeconds: 100,
     });
 
-    const policy = await service.getPlaybackPolicy(video.id, 'guest', 60);
-    expect(policy.canPlay).toBe(false);
-    expect(policy.stopAtPercent).toBe(50);
-    expect(policy.action).toBe('login_required');
+    const at49_9 = await service.getPlaybackPolicy(video.id, 'guest', 49.9);
+    const at50 = await service.getPlaybackPolicy(video.id, 'guest', 50);
+    const at50_1 = await service.getPlaybackPolicy(video.id, 'guest', 50.1);
+
+    expect(at49_9).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 50,
+    });
+    expect(at50).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+    expect(at50_1).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+  });
+
+  it('returns member policy with full playback regardless of boundary positions', async () => {
+    const service = new VideosService(new InMemoryVideoRepository());
+    const video = await service.create({
+      title: 'member-gating test',
+      url: 'https://stream.test/member-gating',
+      durationSeconds: 100,
+    });
+
+    const at49_9 = await service.getPlaybackPolicy(video.id, 'member', 49.9);
+    const at50 = await service.getPlaybackPolicy(video.id, 'member', 50);
+    const at50_1 = await service.getPlaybackPolicy(video.id, 'member', 50.1);
+
+    expect(at49_9).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50_1).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
   });
 });

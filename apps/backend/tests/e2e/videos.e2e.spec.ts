@@ -59,20 +59,78 @@ describe('Videos API (e2e)', () => {
     expect(res.body.length).toBeGreaterThan(0);
   });
 
-  it('GET /videos/:id/playback-policy blocks guest at 50+', async () => {
+  it('GET /videos/:id/playback-policy enforces guest boundary at 49.9, 50, 50.1', async () => {
     const created = await request(app.getHttpServer()).post('/videos').send({
       title: 'gate check',
       url: 'https://stream.test/gate-check',
       durationSeconds: 180,
     });
 
-    const blocked = await request(app.getHttpServer()).get(
-      `/videos/${created.body.id}/playback-policy?viewerType=guest&positionPercent=60`,
+    const allowed = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=guest&positionPercent=49.9`,
+    );
+    const at50 = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=guest&positionPercent=50`,
+    );
+    const at50_1 = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=guest&positionPercent=50.1`,
     );
 
-    expect(blocked.status).toBe(200);
-    expect(blocked.body.canPlay).toBe(false);
-    expect(blocked.body.action).toBe('login_required');
+    expect(allowed.status).toBe(200);
+    expect(allowed.body).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 50,
+    });
+    expect(at50.status).toBe(200);
+    expect(at50.body).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+    expect(at50_1.status).toBe(200);
+    expect(at50_1.body).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+  });
+
+  it('GET /videos/:id/playback-policy always allows member with full playback policy', async () => {
+    const created = await request(app.getHttpServer()).post('/videos').send({
+      title: 'member gate check',
+      url: 'https://stream.test/member-gate-check',
+      durationSeconds: 180,
+    });
+
+    const at49_9 = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=member&positionPercent=49.9`,
+    );
+    const at50 = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=member&positionPercent=50`,
+    );
+    const at50_1 = await request(app.getHttpServer()).get(
+      `/videos/${created.body.id}/playback-policy?viewerType=member&positionPercent=50.1`,
+    );
+
+    expect(at49_9.status).toBe(200);
+    expect(at49_9.body).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50.status).toBe(200);
+    expect(at50.body).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50_1.status).toBe(200);
+    expect(at50_1.body).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
   });
 
   it('GET /videos/:id -> 200', async () => {

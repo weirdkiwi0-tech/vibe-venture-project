@@ -76,19 +76,60 @@ describe('VideosService (unit)', () => {
     expect(list).toHaveLength(4);
   });
 
-  it('blocks guest playback at 50 percent', async () => {
+  it('applies guest playback boundary policy at 49.9, 50, and 50.1', async () => {
     const video = await service.create({
       title: 'guest gate',
       url: 'https://stream.test/gate',
       durationSeconds: 180,
     });
 
-    const allowed = await service.getPlaybackPolicy(video.id, 'guest', 49);
-    const blocked = await service.getPlaybackPolicy(video.id, 'guest', 50);
+    const at49_9 = await service.getPlaybackPolicy(video.id, 'guest', 49.9);
+    const at50 = await service.getPlaybackPolicy(video.id, 'guest', 50);
+    const at50_1 = await service.getPlaybackPolicy(video.id, 'guest', 50.1);
 
-    expect(allowed.canPlay).toBe(true);
-    expect(blocked.canPlay).toBe(false);
-    expect(blocked.action).toBe('login_required');
+    expect(at49_9).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 50,
+    });
+    expect(at50).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+    expect(at50_1).toMatchObject({
+      canPlay: false,
+      action: 'login_required',
+      stopAtPercent: 50,
+    });
+  });
+
+  it('always allows member playback with full access policy', async () => {
+    const video = await service.create({
+      title: 'member policy',
+      url: 'https://stream.test/member-policy',
+      durationSeconds: 180,
+    });
+
+    const at49_9 = await service.getPlaybackPolicy(video.id, 'member', 49.9);
+    const at50 = await service.getPlaybackPolicy(video.id, 'member', 50);
+    const at50_1 = await service.getPlaybackPolicy(video.id, 'member', 50.1);
+
+    expect(at49_9).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
+    expect(at50_1).toMatchObject({
+      canPlay: true,
+      action: 'none',
+      stopAtPercent: 100,
+    });
   });
 
   it('throws when video does not exist', async () => {

@@ -22,6 +22,9 @@ export interface VideoCommentItem {
 
 @Injectable()
 export class VideosService {
+  private static readonly GUEST_STOP_AT_PERCENT = 50;
+  private static readonly MEMBER_STOP_AT_PERCENT = 100;
+
   private readonly likesByVideoId = new Map<string, Set<string>>();
   private readonly commentsByVideoId = new Map<string, VideoCommentItem[]>();
   private readonly commentLikesByCommentId = new Map<string, Set<string>>();
@@ -188,18 +191,19 @@ export class VideosService {
     }
 
     if (viewerType === 'guest') {
+      const canPlay = positionPercent < VideosService.GUEST_STOP_AT_PERCENT;
       return {
         videoId: video.id,
-        canPlay: positionPercent < 50,
-        stopAtPercent: 50,
-        action: positionPercent < 50 ? 'none' : 'login_required',
+        canPlay,
+        stopAtPercent: VideosService.GUEST_STOP_AT_PERCENT,
+        action: canPlay ? 'none' : 'login_required',
       };
     }
 
     return {
       videoId: video.id,
       canPlay: true,
-      stopAtPercent: 100,
+      stopAtPercent: VideosService.MEMBER_STOP_AT_PERCENT,
       action: 'none',
     };
   }
