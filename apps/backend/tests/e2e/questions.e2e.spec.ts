@@ -107,6 +107,79 @@ describe('Questions API (e2e)', () => {
     expect(detailRes.body.visibility).toBe('nickname');
   });
 
+  it('keeps visibility field and value consistent across list/all/mine/detail', async () => {
+    const authorId = `visibility-owner-${Date.now()}`;
+    const anonymousTitle = `visibility-all-anonymous-${Date.now()}`;
+    const nicknameTitle = `visibility-all-nickname-${Date.now()}`;
+
+    const anonymousCreated = await request(app.getHttpServer()).post('/questions').set('x-user-id', authorId).send({
+      title: anonymousTitle,
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'anonymous',
+    });
+    const nicknameCreated = await request(app.getHttpServer()).post('/questions').set('x-user-id', authorId).send({
+      title: nicknameTitle,
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    });
+
+    expect(anonymousCreated.status).toBe(201);
+    expect(nicknameCreated.status).toBe(201);
+
+    const listRes = await request(app.getHttpServer()).get(
+      `/questions?title=${encodeURIComponent('visibility-all-')}`,
+    );
+    const allRes = await request(app.getHttpServer()).get(
+      `/questions/all?title=${encodeURIComponent('visibility-all-')}`,
+    );
+    const mineRes = await request(app.getHttpServer()).get('/questions/mine').set('x-user-id', authorId);
+    const anonymousDetailRes = await request(app.getHttpServer()).get(`/questions/${anonymousCreated.body.id}`);
+    const nicknameDetailRes = await request(app.getHttpServer()).get(`/questions/${nicknameCreated.body.id}`);
+
+    expect(listRes.status).toBe(200);
+    expect(allRes.status).toBe(200);
+    expect(mineRes.status).toBe(200);
+    expect(anonymousDetailRes.status).toBe(200);
+    expect(nicknameDetailRes.status).toBe(200);
+
+    const findById = (items: Array<{ id: string; visibility?: string }>, id: string) =>
+      items.find((item) => item.id === id);
+
+    const anonymousInList = findById(listRes.body, anonymousCreated.body.id);
+    const nicknameInList = findById(listRes.body, nicknameCreated.body.id);
+    const anonymousInAll = findById(allRes.body, anonymousCreated.body.id);
+    const nicknameInAll = findById(allRes.body, nicknameCreated.body.id);
+    const anonymousInMine = findById(mineRes.body, anonymousCreated.body.id);
+    const nicknameInMine = findById(mineRes.body, nicknameCreated.body.id);
+
+    expect(anonymousInList).toBeDefined();
+    expect(nicknameInList).toBeDefined();
+    expect(anonymousInAll).toBeDefined();
+    expect(nicknameInAll).toBeDefined();
+    expect(anonymousInMine).toBeDefined();
+    expect(nicknameInMine).toBeDefined();
+
+    expect(anonymousInList).toHaveProperty('visibility');
+    expect(nicknameInList).toHaveProperty('visibility');
+    expect(anonymousInAll).toHaveProperty('visibility');
+    expect(nicknameInAll).toHaveProperty('visibility');
+    expect(anonymousInMine).toHaveProperty('visibility');
+    expect(nicknameInMine).toHaveProperty('visibility');
+
+    expect(anonymousInList?.visibility).toBe('anonymous');
+    expect(nicknameInList?.visibility).toBe('nickname');
+    expect(anonymousInAll?.visibility).toBe('anonymous');
+    expect(nicknameInAll?.visibility).toBe('nickname');
+    expect(anonymousInMine?.visibility).toBe('anonymous');
+    expect(nicknameInMine?.visibility).toBe('nickname');
+    expect(anonymousDetailRes.body.visibility).toBe('anonymous');
+    expect(nicknameDetailRes.body.visibility).toBe('nickname');
+  });
+
   it('POST /questions -> 400 when visibility is invalid', async () => {
     const res = await request(app.getHttpServer()).post('/questions').send({
       title: 'invalid visibility',

@@ -81,6 +81,41 @@ describe('QuestionsService (unit)', () => {
     expect(question.visibility).toBe('nickname');
   });
 
+  it('preserves visibility values in listAllQuestions and listByAuthorId', async () => {
+    const authorId = 'visibility-author';
+    const anonymousQuestion = await service.create({
+      title: 'unit visibility anonymous',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'anonymous',
+    }, authorId);
+
+    const nicknameQuestion = await service.create({
+      title: 'unit visibility nickname',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    }, authorId);
+
+    const all = await service.listAllQuestions({
+      subject: 'MATH',
+      grade: '2',
+    });
+    const mine = await service.listByAuthorId(authorId);
+
+    const anonymousInAll = all.find((item) => item.question.id === anonymousQuestion.id);
+    const nicknameInAll = all.find((item) => item.question.id === nicknameQuestion.id);
+    const anonymousInMine = mine.find((item) => item.question.id === anonymousQuestion.id);
+    const nicknameInMine = mine.find((item) => item.question.id === nicknameQuestion.id);
+
+    expect(anonymousInAll?.question.visibility).toBe('anonymous');
+    expect(nicknameInAll?.question.visibility).toBe('nickname');
+    expect(anonymousInMine?.question.visibility).toBe('anonymous');
+    expect(nicknameInMine?.question.visibility).toBe('nickname');
+  });
+
   it('throws NotFoundException when question does not exist', async () => {
     await expect(service.findById('nope')).rejects.toThrow(NotFoundException);
   });

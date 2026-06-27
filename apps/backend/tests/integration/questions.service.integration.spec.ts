@@ -92,6 +92,45 @@ describe('QuestionsService + Repository (integration)', () => {
     expect(listedNickname?.question.visibility).toBe('nickname');
   });
 
+  it('keeps visibility in listAllQuestions and listByAuthorId', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    const authorId = 'integration-visibility-author';
+    const anonymousQuestion = await service.create({
+      title: 'integration listAll anonymous',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'anonymous',
+    }, authorId);
+    const nicknameQuestion = await service.create({
+      title: 'integration listAll nickname',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+      visibility: 'nickname',
+    }, authorId);
+
+    const all = await service.listAllQuestions({
+      subject: 'MATH',
+      grade: '2',
+    });
+    const mine = await service.listByAuthorId(authorId);
+
+    const anonymousInAll = all.find((item) => item.question.id === anonymousQuestion.id);
+    const nicknameInAll = all.find((item) => item.question.id === nicknameQuestion.id);
+    const anonymousInMine = mine.find((item) => item.question.id === anonymousQuestion.id);
+    const nicknameInMine = mine.find((item) => item.question.id === nicknameQuestion.id);
+
+    expect(anonymousInAll?.question.visibility).toBe('anonymous');
+    expect(nicknameInAll?.question.visibility).toBe('nickname');
+    expect(anonymousInMine?.question.visibility).toBe('anonymous');
+    expect(nicknameInMine?.question.visibility).toBe('nickname');
+  });
+
   it('solves question and persists solved state', async () => {
     const repo = new InMemoryQuestionRepository();
     const answerRepo = new InMemoryAnswerRepository();
