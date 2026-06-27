@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InMemoryAnswerRepository } from '../../src/questions/in-memory-answer.repository';
 import { InMemoryQuestionLikeRepository } from '../../src/questions/in-memory-question-like.repository';
 import { InMemoryQuestionRepository } from '../../src/questions/in-memory-question.repository';
@@ -109,6 +109,50 @@ describe('QuestionsService + Repository (integration)', () => {
     const found = await service.findById(created.id);
 
     expect(found.question.status).toBe('solved');
+  });
+
+  it('rejects solve when requester is not author', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    const created = await service.create({
+      title: 'integration owner solve',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+    }, 'author-1');
+
+    await expect(service.solve(created.id, 'other-user')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows admin to solve question', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const authService = {
+      getUserById: jest.fn((userId: string) => {
+        if (userId === 'admin-1') {
+          return { id: 'admin-1', role: 'admin' };
+        }
+
+        return { id: userId, role: 'user' };
+      }),
+    };
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo, authService as never);
+
+    const created = await service.create({
+      title: 'integration admin solve',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+    }, 'author-1');
+
+    const solved = await service.solve(created.id, 'admin-1');
+
+    expect(solved.question.status).toBe('solved');
+    expect(authService.getUserById).toHaveBeenCalledWith('admin-1');
   });
 
   it('lists questions with solved status and answerCount', async () => {

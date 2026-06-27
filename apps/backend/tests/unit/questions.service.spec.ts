@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InMemoryAnswerRepository } from '../../src/questions/in-memory-answer.repository';
 import { InMemoryQuestionLikeRepository } from '../../src/questions/in-memory-question-like.repository';
 import { InMemoryQuestionRepository } from '../../src/questions/in-memory-question.repository';
@@ -97,6 +97,45 @@ describe('QuestionsService (unit)', () => {
     expect(solved.question.status).toBe('solved');
   });
 
+  it('throws ForbiddenException when non-author tries to solve question', async () => {
+    const created = await service.create({
+      title: 'owner only solve',
+      body: 'body',
+      subject: 'MATH',
+      grade: '1',
+    }, 'author-1');
+
+    await expect(service.solve(created.id, 'other-user')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows admin user to solve question', async () => {
+    const repo = new InMemoryQuestionRepository();
+    const localAnswerRepo = new InMemoryAnswerRepository();
+    const localQuestionLikeRepo = new InMemoryQuestionLikeRepository();
+    const authService = {
+      getUserById: jest.fn((userId: string) => {
+        if (userId === 'admin-1') {
+          return { id: 'admin-1', role: 'admin' };
+        }
+
+        return { id: userId, role: 'user' };
+      }),
+    };
+
+    const localService = new QuestionsService(repo, localAnswerRepo, localQuestionLikeRepo, authService as unknown as AuthService);
+    const created = await localService.create({
+      title: 'admin solve',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    }, 'author-1');
+
+    const solved = await localService.solve(created.id, 'admin-1');
+
+    expect(solved.question.status).toBe('solved');
+    expect(authService.getUserById).toHaveBeenCalledWith('admin-1');
+  });
+
   it('is idempotent when solve is called twice', async () => {
     const repo = new InMemoryQuestionRepository();
     const answerRepo = new InMemoryAnswerRepository();
@@ -115,8 +154,8 @@ describe('QuestionsService (unit)', () => {
       }),
     );
 
-    const first = await localService.solve('q-solved');
-    const second = await localService.solve('q-solved');
+    const first = await localService.solve('q-solved', 'u-1');
+    const second = await localService.solve('q-solved', 'u-1');
 
     expect(first.question.status).toBe('solved');
     expect(second.question.status).toBe('solved');

@@ -169,8 +169,13 @@ export class QuestionsController {
   }
 
   @Patch(':id/solve')
-  async solve(@Param('id') id: string) {
-    return this.mapQuestionItem(await this.questionsService.solve(id));
+  async solve(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Headers('x-user-id') userIdHeader?: string,
+  ) {
+    const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
+    return this.mapQuestionItem(await this.questionsService.solve(id, requestUserId));
   }
 
   @Post(':id/like')

@@ -75,10 +75,16 @@ export class QuestionsService {
     return { question: viewedQuestion, answerCount };
   }
 
-  async solve(id: string) {
+  async solve(id: string, requestUserId = 'anonymous-user') {
     const found = await this.questionRepository.findById(id);
     if (!found) {
       throw new NotFoundException('question not found');
+    }
+
+    const isAdmin = await this.isAdminRequester(requestUserId);
+
+    if (found.authorId !== requestUserId && !isAdmin) {
+      throw new ForbiddenException('only author can solve question');
     }
 
     const solved = found.solve();
@@ -167,8 +173,7 @@ export class QuestionsService {
       throw new NotFoundException('question not found');
     }
 
-    const requester = this.authService ? await this.authService.getUserById(requestUserId) : undefined;
-    const isAdmin = requester?.role === 'admin';
+    const isAdmin = await this.isAdminRequester(requestUserId);
 
     if (question.authorId !== requestUserId && !isAdmin) {
       throw new ForbiddenException('only author can delete question');
@@ -193,6 +198,15 @@ export class QuestionsService {
     }
 
     return this.reportsService.listReportedQuestionIdsByReporter(viewerId);
+  }
+
+  private async isAdminRequester(requestUserId: string): Promise<boolean> {
+    if (!this.authService) {
+      return false;
+    }
+
+    const requester = await this.authService.getUserById(requestUserId);
+    return requester?.role === 'admin';
   }
 
   private shouldIncreaseViewCount(viewerId?: string): boolean {

@@ -286,25 +286,59 @@ describe('Questions API (e2e)', () => {
     expect(listAnswersRes.body[0].comments[0].replies[0].attachments).toEqual(['data:video/mp4;base64,BBBB']);
   });
 
-  it('PATCH /questions/:id/solve -> 200 and idempotent', async () => {
+  it('PATCH /questions/:id/solve -> 200 for author and idempotent', async () => {
+    const author = await authService.signInWithGoogle({
+      googleId: `google-solve-author-${Date.now()}`,
+      email: `solve-author-${Date.now()}@example.com`,
+      displayName: 'Solve Author',
+    });
+    const authorSession = await authService.createSession(author.user.id);
+
     const created = await request(app.getHttpServer()).post('/questions').send({
       title: 'to solve',
       body: 'body',
       subject: 'MATH',
       grade: '2',
-    });
+    }).set('x-user-id', author.user.id);
 
     const first = await request(app.getHttpServer()).patch(
       `/questions/${created.body.id}/solve`,
-    );
+    ).set('Cookie', [`keepit-session=${authorSession}`]);
     expect(first.status).toBe(200);
     expect(first.body.status).toBe('solved');
 
     const second = await request(app.getHttpServer()).patch(
       `/questions/${created.body.id}/solve`,
-    );
+    ).set('Cookie', [`keepit-session=${authorSession}`]);
     expect(second.status).toBe(200);
     expect(second.body.status).toBe('solved');
+  });
+
+  it('PATCH /questions/:id/solve -> 403 for non-author', async () => {
+    const author = await authService.signInWithGoogle({
+      googleId: `google-solve-author-${Date.now()}`,
+      email: `solve-author-${Date.now()}@example.com`,
+      displayName: 'Solve Author',
+    });
+    const other = await authService.signInWithGoogle({
+      googleId: `google-solve-other-${Date.now()}`,
+      email: `solve-other-${Date.now()}@example.com`,
+      displayName: 'Solve Other',
+    });
+    const otherSession = await authService.createSession(other.user.id);
+
+    const created = await request(app.getHttpServer()).post('/questions').send({
+      title: 'owner only solve target',
+      body: 'body',
+      subject: 'MATH',
+      grade: '2',
+    }).set('x-user-id', author.user.id);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/questions/${created.body.id}/solve`)
+      .set('Cookie', [`keepit-session=${otherSession}`]);
+
+    expect(res.status).toBe(403);
   });
 
   it('PATCH /questions/:id/solve -> 404 for unknown id', async () => {
