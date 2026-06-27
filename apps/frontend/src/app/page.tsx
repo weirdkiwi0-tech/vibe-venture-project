@@ -6,6 +6,41 @@ import { StatsStrip } from '../components/stats-strip';
 import { QuestionList, VideoGrid } from '../components/feed-cards';
 import { getHomeFeed } from '../lib/api';
 
+type TopQuestionItem = {
+  id: string;
+  likeCount: number;
+  createdAt: string;
+};
+
+function applyTopQuestionPolicy<T extends TopQuestionItem>(questions: T[]): T[] {
+  if (questions.length <= 10) {
+    return questions.slice(0, 10);
+  }
+
+  const byPopular = [...questions].sort((a, b) => {
+    if (b.likeCount !== a.likeCount) {
+      return b.likeCount - a.likeCount;
+    }
+
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const popular = byPopular.slice(0, 7);
+  const popularIds = new Set(popular.map((item) => item.id));
+  const helpNeeded = questions
+    .filter((item) => !popularIds.has(item.id))
+    .sort((a, b) => {
+      if (a.likeCount !== b.likeCount) {
+        return a.likeCount - b.likeCount;
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+    .slice(0, 3);
+
+  return [...popular, ...helpNeeded];
+}
+
 export default async function HomePage() {
   const cookieHeader = (await headers()).get('cookie') ?? undefined;
 
@@ -81,7 +116,7 @@ export default async function HomePage() {
               </Link>
             }
           >
-            <QuestionList questions={data.feed.questions} autoSlide itemsPerSlide={2} />
+            <QuestionList questions={applyTopQuestionPolicy(data.feed.questions)} autoSlide itemsPerSlide={2} />
           </SectionCard>
         </>
       )}

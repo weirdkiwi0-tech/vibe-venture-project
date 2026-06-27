@@ -113,6 +113,7 @@ type QuestionListItem = {
 function QuestionCards({
   items,
   startIndex,
+  totalCount,
   authUser,
   onDelete,
   onLike,
@@ -120,6 +121,7 @@ function QuestionCards({
 }: {
   items: QuestionListItem[];
   startIndex: number;
+  totalCount: number;
   authUser: ReturnType<typeof useAuthUser>['authUser'];
   onDelete: (questionId: string) => Promise<void>;
   onLike: (questionId: string) => Promise<void>;
@@ -129,7 +131,13 @@ function QuestionCards({
 
   return (
     <>
-      {items.map((question, index) => (
+      {items.map((question, index) => {
+        const absoluteIndex = startIndex + index;
+        const policyLabel = totalCount === 10
+          ? (absoluteIndex < 7 ? '인기 질문' : '도움 필요 질문')
+          : null;
+
+        return (
         <article
           key={question.id}
           className="surface-card question-card"
@@ -146,6 +154,8 @@ function QuestionCards({
           <div className="question-index">{String(startIndex + index + 1).padStart(2, '0')}</div>
           <div>
             <div className="card-meta">
+              {policyLabel ? <span>{policyLabel}</span> : null}
+              {policyLabel ? ' · ' : ''}
               {question.subject} · 고{question.grade} · {question.status}
             </div>
             <h3>
@@ -205,7 +215,8 @@ function QuestionCards({
             </div>
           </div>
         </article>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -309,6 +320,7 @@ export function QuestionList({
                 <QuestionCards
                   items={slideItems}
                   startIndex={slideIndex * normalizedItemsPerSlide}
+                  totalCount={items.length}
                   authUser={authUser}
                   onDelete={handleDelete}
                   onLike={handleLike}
@@ -327,6 +339,7 @@ export function QuestionList({
       <QuestionCards
         items={items}
         startIndex={0}
+        totalCount={items.length}
         authUser={authUser}
         onDelete={handleDelete}
         onLike={handleLike}
