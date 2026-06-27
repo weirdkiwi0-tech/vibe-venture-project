@@ -1,10 +1,11 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AuthService } from '../auth';
 import { ReportsService } from '../reports/reports.service';
 import { ANSWER_REPOSITORY, AnswerRepository } from './answers.repository';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { QuestionEntity } from './entities/question.entity';
+import { DomainValidationError } from './errors/domain-validation.error';
 import { QUESTION_LIKE_REPOSITORY, QuestionLikeRepository } from './question-like.repository';
 import { QUESTION_REPOSITORY, QuestionRepository } from './questions.repository';
 
@@ -29,19 +30,27 @@ export class QuestionsService {
   ) {}
 
   async create(input: CreateQuestionDto, authorId = 'anonymous-user') {
-    const question = QuestionEntity.create({
-      id: randomUUID(),
-      authorId,
-      title: input.title,
-      body: input.body,
-      subject: input.subject,
-      grade: input.grade,
-      visibility: input.visibility,
-      attachments: input.attachments,
-    });
+    try {
+      const question = QuestionEntity.create({
+        id: randomUUID(),
+        authorId,
+        title: input.title,
+        body: input.body,
+        subject: input.subject,
+        grade: input.grade,
+        visibility: input.visibility,
+        attachments: input.attachments,
+      });
 
-    await this.questionRepository.save(question);
-    return question;
+      await this.questionRepository.save(question);
+      return question;
+    } catch (error) {
+      if (error instanceof DomainValidationError) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw error;
+    }
   }
 
   async findById(id: string, viewerId?: string) {

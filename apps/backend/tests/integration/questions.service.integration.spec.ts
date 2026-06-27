@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { InMemoryAnswerRepository } from '../../src/questions/in-memory-answer.repository';
 import { InMemoryQuestionLikeRepository } from '../../src/questions/in-memory-question-like.repository';
 import { InMemoryQuestionRepository } from '../../src/questions/in-memory-question.repository';
@@ -9,6 +10,20 @@ import { InMemoryAdminAuditLogRepository } from '../../src/reports/in-memory-adm
 import { seedTopPolicyQuestions } from '../support/top-policy-fixture';
 
 describe('QuestionsService + Repository (integration)', () => {
+  const expectCreateBadRequest = async (
+    service: QuestionsService,
+    input: { title: string; body: string; subject: string; grade: string },
+    expectedMessage: string,
+  ) => {
+    try {
+      await service.create(input);
+      throw new Error('expected create to throw BadRequestException');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as Error).message).toBe(expectedMessage);
+    }
+  };
+
   it('creates then fetches question', async () => {
     const repo = new InMemoryQuestionRepository();
     const answerRepo = new InMemoryAnswerRepository();
@@ -27,6 +42,20 @@ describe('QuestionsService + Repository (integration)', () => {
     expect(found.question.id).toBe(created.id);
     expect(found.question.grade).toBe('3');
     expect(found.answerCount).toBe(0);
+  });
+
+  it.each([
+    ['title', { title: '   ', body: 'integration body', subject: 'MATH', grade: '3' }, 'title is required'],
+    ['body', { title: 'integration title', body: '   ', subject: 'MATH', grade: '3' }, 'body is required'],
+    ['subject', { title: 'integration title', body: 'integration body', subject: '   ', grade: '3' }, 'subject is required'],
+    ['grade', { title: 'integration title', body: 'integration body', subject: 'MATH', grade: '   ' }, 'grade is required'],
+  ])('rejects blank %s with consistent validation message', async (_field, input, expectedMessage) => {
+    const repo = new InMemoryQuestionRepository();
+    const answerRepo = new InMemoryAnswerRepository();
+    const questionLikeRepo = new InMemoryQuestionLikeRepository();
+    const service = new QuestionsService(repo, answerRepo, questionLikeRepo);
+
+    await expectCreateBadRequest(service, input, expectedMessage);
   });
 
   it('keeps visibility consistently across create and query flow', async () => {

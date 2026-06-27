@@ -129,6 +129,29 @@ describe('Questions API (e2e)', () => {
     expect(res.status).toBe(400);
   });
 
+  it.each([
+    ['title', { title: '   ', body: 'E2E body', subject: 'MATH', grade: '2' }],
+    ['body', { title: 'E2E title', body: '   ', subject: 'MATH', grade: '2' }],
+    ['subject', { title: 'E2E title', body: 'E2E body', subject: '   ', grade: '2' }],
+    ['grade', { title: 'E2E title', body: 'E2E body', subject: 'MATH', grade: '   ' }],
+  ])('POST /questions -> 400 when %s is blank', async (_field, payload) => {
+    const res = await request(app.getHttpServer()).post('/questions').send(payload);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /questions -> 201 for valid required fields', async () => {
+    const res = await request(app.getHttpServer()).post('/questions').send({
+      title: 'valid title',
+      body: 'valid body',
+      subject: 'MATH',
+      grade: '2',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+  });
+
   it('GET /questions/:id -> 200 and 404', async () => {
     const created = await request(app.getHttpServer()).post('/questions').send({
       title: 'to fetch',

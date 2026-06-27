@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InMemoryAnswerRepository } from '../../src/questions/in-memory-answer.repository';
 import { InMemoryQuestionLikeRepository } from '../../src/questions/in-memory-question-like.repository';
 import { InMemoryQuestionRepository } from '../../src/questions/in-memory-question.repository';
@@ -21,6 +21,20 @@ describe('QuestionsService (unit)', () => {
     service = new QuestionsService(questionRepo, answerRepo, questionLikeRepo);
   });
 
+  const expectCreateBadRequest = async (
+    service: QuestionsService,
+    input: { title: string; body: string; subject: string; grade: string },
+    expectedMessage: string,
+  ) => {
+    try {
+      await service.create(input);
+      throw new Error('expected create to throw BadRequestException');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as Error).message).toBe(expectedMessage);
+    }
+  };
+
   it('creates a question', async () => {
     const question = await service.create({
       title: 'Trig question',
@@ -33,6 +47,15 @@ describe('QuestionsService (unit)', () => {
 
     expect(question.id).toBeDefined();
     expect(question.title).toBe('Trig question');
+  });
+
+  it.each([
+    ['title', { title: '   ', body: 'How to solve?', subject: 'MATH', grade: '2' }, 'title is required'],
+    ['body', { title: 'Trig question', body: '   ', subject: 'MATH', grade: '2' }, 'body is required'],
+    ['subject', { title: 'Trig question', body: 'How to solve?', subject: '   ', grade: '2' }, 'subject is required'],
+    ['grade', { title: 'Trig question', body: 'How to solve?', subject: 'MATH', grade: '   ' }, 'grade is required'],
+  ])('throws BadRequestException with consistent message when %s is blank', async (_field, input, expectedMessage) => {
+    await expectCreateBadRequest(service, input, expectedMessage);
   });
 
   it('uses anonymous visibility by default when not provided', async () => {
