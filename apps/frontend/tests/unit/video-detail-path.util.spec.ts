@@ -5,6 +5,10 @@ describe('video detail path utility (unit)', () => {
     expect(toVideoDetailPath('v-1')).toBe('/videos/v-1');
   });
 
+  it('encodes reserved characters in the video id', () => {
+    expect(toVideoDetailPath('folder/name')).toBe('/videos/folder%2Fname');
+  });
+
   it("returns '/videos' when id is empty", () => {
     expect(toVideoDetailPath('')).toBe('/videos');
   });

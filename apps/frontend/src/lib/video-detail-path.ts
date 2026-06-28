@@ -1,10 +1,12 @@
-export function buildVideoDetailPath(id: string): string {
+import type { Route } from 'next';
+
+export function buildVideoDetailPath(id: string): Route {
   const trimmedId = id.trim();
   if (!trimmedId) {
-    return '/videos';
+    return '/videos' as Route;
   }
 
-  return `/videos/${trimmedId}`;
+  return `/videos/${encodeURIComponent(trimmedId)}` as Route;
 }
 
 export const toVideoDetailPath = buildVideoDetailPath;
