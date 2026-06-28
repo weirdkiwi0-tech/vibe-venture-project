@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SiteShell } from '../../components/site-shell';
 import { SectionCard } from '../../components/section-card';
 import { deleteVideo, getFilteredVideos, likeVideo } from '../../lib/api';
+import { buildVideoDetailPath } from '../../lib/video-detail-path';
 import type { VideoItem } from '../../lib/types';
 import { useAuthUser } from '../../components/role-provider';
 
@@ -33,7 +34,6 @@ export default function VideosPage() {
   const [likedByVideo, setLikedByVideo] = useState<Record<string, boolean>>({});
   const [deletingByVideo, setDeletingByVideo] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const guestRedirectingRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -93,18 +93,7 @@ export default function VideosPage() {
       return;
     }
 
-    if (!authUser) {
-      if (guestRedirectingRef.current) {
-        return;
-      }
-
-      guestRedirectingRef.current = true;
-      window.alert('로그인/회원가입 후 영상을 볼 수 있습니다.');
-      router.push('/profile');
-      return;
-    }
-
-    router.push(`/videos/${videoId}`);
+    router.push(buildVideoDetailPath(videoId));
   };
 
   const handleDelete = async (videoId: string) => {

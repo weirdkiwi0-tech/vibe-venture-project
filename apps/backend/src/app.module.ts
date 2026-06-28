@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { AdminModule } from './admin';
 import { AuthModule } from './auth';
+import { AuthService } from './auth/auth.service';
+import { seedDevAdminOperatorAccounts } from './auth/dev-local-seed.util';
 import { CommunityModule } from './community';
 import { MentoringModule } from './mentoring';
 import { HomeModule } from './home';
@@ -22,4 +24,16 @@ import { VideosModule } from './videos';
     RewardsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly authService: AuthService) {}
+
+  async onModuleInit(): Promise<void> {
+    if (process.env.AZURE_TABLES_CONNECTION_STRING) {
+      return;
+    }
+
+    if (process.env.DEV_SEED_ADMIN === 'true' || process.env.NODE_ENV === 'test') {
+      await seedDevAdminOperatorAccounts(this.authService, process.env);
+    }
+  }
+}

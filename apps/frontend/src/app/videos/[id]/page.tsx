@@ -9,6 +9,7 @@ import { CommunityProfileModal } from '../../../components/community-profile-mod
 import { SiteShell } from '../../../components/site-shell';
 import { useAuthUser } from '../../../components/role-provider';
 import { useCommunityPreferences } from '../../../lib/community-preferences';
+import { hasReachedGuestPlaybackLimit } from '../../../lib/video-guest-gate';
 import { createReportLink } from '../../../lib/report-links';
 import {
   createVideoComment,
@@ -46,29 +47,10 @@ export default function VideoDetailPage() {
   const [commentLikeLoading, setCommentLikeLoading] = useState<Record<string, boolean>>({});
   const [likedByComment, setLikedByComment] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
-  const guestRedirectedRef = useRef(false);
+  const [guestPreviewLimited, setGuestPreviewLimited] = useState(false);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (!authResolved) {
-      return;
-    }
-
-    if (!authUser) {
-      if (guestRedirectedRef.current) {
-        return;
-      }
-
-      guestRedirectedRef.current = true;
-      window.alert('로그인/회원가입 후 영상을 볼 수 있습니다.');
-      router.replace('/profile');
-    }
-  }, [authResolved, authUser, router]);
-
-  useEffect(() => {
-    if (authResolved && !authUser) {
-      return;
-    }
-
     if (!id) {
       return;
     }
@@ -235,9 +217,30 @@ export default function VideoDetailPage() {
     }
   };
 
+  const handleGuestPreviewTimeUpdate = () => {
+    if (authUser || guestPreviewLimited) {
+      return;
+    }
+
+    const videoElement = videoElementRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    if (!hasReachedGuestPlaybackLimit(videoElement.currentTime, videoElement.duration)) {
+      return;
+    }
+
+    const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+    if (!isJsdom) {
+      videoElement.pause();
+    }
+    setGuestPreviewLimited(true);
+  };
+
   return (
     <SiteShell title="풀이영상 상세" description="큰 화면으로 보고, 댓글과 신고를 바로 처리할 수 있습니다.">
-      <SectionCard eyebrow="영상 플레이어" title="풀이영상 크게 보기">
+      <SectionCard eyebrow="영상 플레이어" title={loading ? '영상 플레이어' : '풀이영상 크게 보기'}>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.8rem' }}>
           <button type="button" className="secondary-button" onClick={() => router.push('/videos')}>
             목록으로
@@ -255,7 +258,6 @@ export default function VideoDetailPage() {
         </div>
 
         {loading ? <div className="empty-state">영상을 불러오는 중입니다...</div> : null}
-        {authResolved && !authUser ? <div className="empty-state">로그인 화면으로 이동 중입니다...</div> : null}
         {error ? <p className="form-message error">{error}</p> : null}
 
         {!loading && !error && video ? (
@@ -275,11 +277,40 @@ export default function VideoDetailPage() {
               </div>
             </div>
             <h3 style={{ marginTop: '0.35rem', marginBottom: '0.6rem' }}>{video.title}</h3>
-            <video
-              src={video.url}
-              controls
-              style={{ width: '100%', borderRadius: '12px', maxHeight: '72vh' }}
-            />
+            <div style={{ position: 'relative' }}>
+              <video
+                ref={videoElementRef}
+                src={video.url}
+                controls
+                onTimeUpdate={handleGuestPreviewTimeUpdate}
+                style={{ width: '100%', borderRadius: '12px', maxHeight: '72vh' }}
+              />
+              {!authUser && guestPreviewLimited ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '12px',
+                    background: 'rgba(0, 0, 0, 0.72)',
+                    color: '#fff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '1rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  <strong>50% 미리보기 종료</strong>
+                  <p style={{ margin: 0 }}>로그인 또는 회원가입 후 전체 시청이 가능합니다.</p>
+                  <p style={{ margin: 0 }}>비회원은 50%까지만 시청할 수 있습니다</p>
+                  <button type="button" className="primary-button" onClick={() => router.push('/profile')}>
+                    로그인 / 회원가입
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <div className="card-footer" style={{ marginTop: '0.7rem' }}>
               <span>좋아요 {video.likeCount} · 조회 {video.viewCount}</span>
               <button

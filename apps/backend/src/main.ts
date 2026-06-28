@@ -5,7 +5,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { json, urlencoded, type Request, type Response, type NextFunction } from 'express';
 import { AppModule } from './app.module';
-import { AuthService } from './auth/auth.service';
 
 const REQUEST_BODY_LIMIT = '50mb';
 
@@ -120,18 +119,6 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
-
-  if (process.env.DEV_SEED_ADMIN === 'true' && !process.env.AZURE_TABLES_CONNECTION_STRING) {
-    const email = process.env.DEV_ADMIN_EMAIL ?? 'admin@keepit.dev';
-    const password = process.env.DEV_ADMIN_PASSWORD ?? 'admin1234';
-    const displayName = process.env.DEV_ADMIN_DISPLAY_NAME ?? '운영자';
-    try {
-      const authService = app.get(AuthService);
-      await authService.signUpLocal({ email, password, displayName });
-    } catch {
-      // Dev admin already exists on restart
-    }
-  }
 }
 
 void bootstrap();
