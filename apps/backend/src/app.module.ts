@@ -4,6 +4,7 @@ import { AuthModule } from './auth';
 import { AuthService } from './auth/auth.service';
 import { seedDevAdminOperatorAccounts } from './auth/dev-local-seed.util';
 import { CommunityModule } from './community';
+import { HealthModule } from './health';
 import { MentoringModule } from './mentoring';
 import { HomeModule } from './home';
 import { QuestionsModule } from './questions';
@@ -16,6 +17,7 @@ import { VideosModule } from './videos';
     AuthModule,
     AdminModule,
     CommunityModule,
+    HealthModule,
     HomeModule,
     QuestionsModule,
     ReportsModule,

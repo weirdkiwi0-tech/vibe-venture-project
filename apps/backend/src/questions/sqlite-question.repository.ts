@@ -87,7 +87,7 @@ export class SqliteQuestionRepository implements QuestionRepository {
 
   private mapToEntity(row: any): QuestionEntity {
     return QuestionEntity.create({
-      id: row.id,
+      id: String(row.rowKey ?? row.RowKey ?? row.id),
       authorId: row.authorId,
       title: row.title,
       body: row.body,

@@ -9,7 +9,9 @@ describe('roles utilities', () => {
 
   it('filters navigation items by role', () => {
     expect(filterNavItems('user').some((item) => item.href === '/admin')).toBe(false);
+    expect(filterNavItems('user').some((item) => item.href === '/developer')).toBe(false);
     expect(filterNavItems('admin').some((item) => item.href === '/admin')).toBe(true);
+    expect(filterNavItems('admin').some((item) => item.href === '/developer')).toBe(true);
   });
 
   it('checks role access directly', () => {

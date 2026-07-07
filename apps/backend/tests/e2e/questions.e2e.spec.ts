@@ -245,6 +245,56 @@ describe('Questions API (e2e)', () => {
     expect(notFound.status).toBe(404);
   });
 
+  it('DELETE /questions/:id -> 200 for author, including reported question', async () => {
+    const owner = await authService.signInWithGoogle({
+      googleId: `google-delete-owner-${Date.now()}`,
+      email: `delete-owner-${Date.now()}@example.com`,
+      displayName: 'Delete Owner',
+    });
+    const reporter = await authService.signInWithGoogle({
+      googleId: `google-delete-reporter-${Date.now()}`,
+      email: `delete-reporter-${Date.now()}@example.com`,
+      displayName: 'Delete Reporter',
+    });
+    const ownerSession = await authService.createSession(owner.user.id);
+    const reporterSession = await authService.createSession(reporter.user.id);
+
+    const created = await request(app.getHttpServer())
+      .post('/questions')
+      .set('Cookie', [`keepit-session=${ownerSession}`])
+      .set('x-user-id', owner.user.id)
+      .send({
+        title: `delete-target-${Date.now()}`,
+        body: 'delete body',
+        subject: 'MATH',
+        grade: '2',
+      });
+
+    expect(created.status).toBe(201);
+
+    const reportRes = await request(app.getHttpServer())
+      .post('/reports')
+      .set('Cookie', [`keepit-session=${reporterSession}`])
+      .send({
+        targetType: 'question',
+        targetId: created.body.id,
+        reason: 'delete regression',
+        severity: 'normal',
+      });
+    expect(reportRes.status).toBe(201);
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/questions/${created.body.id}`)
+      .set('Cookie', [`keepit-session=${ownerSession}`])
+      .set('x-user-id', owner.user.id);
+
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toEqual({ success: true });
+
+    const detail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    expect(detail.status).toBe(404);
+  });
+
   it('POST/GET /questions/:id/answers and answerCount update', async () => {
     const created = await request(app.getHttpServer()).post('/questions').send({
       title: 'question with answers',

@@ -7,6 +7,7 @@ type SeedAccountInput = {
 type SeedAccountsInput = {
   admin: SeedAccountInput;
   operator: SeedAccountInput;
+  developer?: SeedAccountInput;
 };
 
 type UserSummary = {
@@ -82,6 +83,9 @@ export async function seedDevAdminOperatorAccounts(
   if (isSeedAccountsInput(envOrInput)) {
     await ensureDevLocalAccount(authService, envOrInput.admin);
     await ensureDevLocalAccount(authService, envOrInput.operator);
+    if (envOrInput.developer) {
+      await ensureDevLocalAccount(authService, envOrInput.developer);
+    }
     return;
   }
 
@@ -98,5 +102,11 @@ export async function seedDevAdminOperatorAccounts(
     email: env.DEV_OPERATOR_EMAIL ?? 'operator@keepit.dev',
     password: env.DEV_OPERATOR_PASSWORD ?? 'Operator#2026',
     displayName: env.DEV_OPERATOR_DISPLAY_NAME?.trim() || '운영자2',
+  });
+
+  await ensureDevLocalAccount(authService, {
+    email: env.DEV_DEVELOPER_EMAIL ?? 'developer@keepit.dev',
+    password: env.DEV_DEVELOPER_PASSWORD ?? 'Dev!2026',
+    displayName: env.DEV_DEVELOPER_DISPLAY_NAME?.trim() || '개발자',
   });
 }

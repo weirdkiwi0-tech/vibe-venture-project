@@ -109,10 +109,14 @@ a {
 }
 
 .topbar p {
-  max-width: 64ch;
+  max-width: 44ch;
   margin: 10px 0 0;
   color: var(--muted);
-  line-height: 1.65;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .topbar-actions {
@@ -248,7 +252,7 @@ a {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 1.2fr auto;
+  grid-template-columns: 1fr;
   gap: 22px;
   padding: 30px;
   border-radius: 28px;
@@ -294,15 +298,15 @@ a {
 
 .hero-card h2 {
   margin-top: 14px;
-  font-size: clamp(2rem, 4vw, 3.8rem);
-  max-width: 12ch;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  max-width: 20ch;
 }
 
 .hero-card p {
-  max-width: 68ch;
+  max-width: 48ch;
   color: var(--muted);
-  font-size: 1.02rem;
-  line-height: 1.7;
+  font-size: 0.96rem;
+  line-height: 1.5;
 }
 
 .hero-actions {

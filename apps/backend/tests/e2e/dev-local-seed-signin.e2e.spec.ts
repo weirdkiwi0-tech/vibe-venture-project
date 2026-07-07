@@ -9,7 +9,7 @@ describe('Dev seeded admin/operator signin (e2e)', () => {
   const originalAdminEmails = process.env.GOOGLE_ADMIN_EMAILS;
 
   beforeAll(async () => {
-    process.env.GOOGLE_ADMIN_EMAILS = 'admin@keepit.dev,operator@keepit.dev';
+    process.env.GOOGLE_ADMIN_EMAILS = 'admin@keepit.dev,operator@keepit.dev,developer@keepit.dev';
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -45,6 +45,15 @@ describe('Dev seeded admin/operator signin (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/auth/signin')
       .send({ email: 'operator@keepit.dev', password: 'Operator#2026' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.role).toBe('admin');
+  });
+
+  it('POST /auth/signin developer 계정 로그인은 200과 role=admin을 반환해야 한다', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/auth/signin')
+      .send({ email: 'developer@keepit.dev', password: 'Dev!2026' });
 
     expect(res.status).toBe(200);
     expect(res.body.user.role).toBe('admin');

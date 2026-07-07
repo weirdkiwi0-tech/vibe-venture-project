@@ -24,8 +24,13 @@ export async function ensureTable(client: TableClient): Promise<void> {
 
 export async function listAllEntities<T extends Record<string, unknown>>(client: TableClient, filter?: string): Promise<T[]> {
   const results: T[] = [];
+  const normalizedFilter = filter
+    ? filter
+      .replace(/\bpartitionKey\b/g, 'PartitionKey')
+      .replace(/\browKey\b/g, 'RowKey')
+    : undefined;
   const entities = filter
-    ? client.listEntities<T>({ queryOptions: { filter } })
+    ? client.listEntities<T>({ queryOptions: { filter: normalizedFilter } })
     : client.listEntities<T>();
 
   for await (const entity of entities) {

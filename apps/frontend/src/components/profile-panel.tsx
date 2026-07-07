@@ -91,6 +91,8 @@ export function ProfilePanel() {
   const [chatTarget, setChatTarget] = useState<{ id: string; name: string; avatar: string; photoUrl?: string } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
+  const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
   const resetSignedOutState = () => {
     setMyQuestions([]);
     setMyAnswers([]);
@@ -199,6 +201,14 @@ export function ProfilePanel() {
       e.preventDefault();
       setError('');
 
+      const normalizedEmail = normalizeEmail(formData.email);
+      const normalizedDisplayName = formData.displayName.trim();
+      const submitPayload = {
+        ...formData,
+        email: normalizedEmail,
+        displayName: normalizedDisplayName,
+      };
+
       if (isSignUp) {
         const validationError = validateSignUp();
         if (validationError) {
@@ -210,12 +220,20 @@ export function ProfilePanel() {
       setLoading(true);
       try {
         if (isSignUp) {
-          await signUpLocal(formData);
+          await signUpLocal(submitPayload);
         } else {
-          await signInLocal({ email: formData.email, password: formData.password });
+          await signInLocal({ email: normalizedEmail, password: formData.password });
         }
-        await refetchAuth();
-        setFormData({ email: '', password: '', displayName: '', photoUrl: '' });
+
+        // Cookie persistence can lag right after auth response on some environments.
+        // Retry once before concluding that auth has not been established.
+        const authenticated = (await refetchAuth()) || (await refetchAuth());
+        if (authenticated) {
+          setFormData({ email: '', password: '', displayName: '', photoUrl: '' });
+          return;
+        }
+
+        setError('로그인 세션 확인이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
       } catch (err) {
         setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
       } finally {

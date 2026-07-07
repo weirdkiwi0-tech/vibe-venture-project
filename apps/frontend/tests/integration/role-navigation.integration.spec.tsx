@@ -30,6 +30,7 @@ describe('role navigation integration', () => {
     await screen.findByText('로그인 / 회원가입');
 
     expect(screen.queryByText('운영자')).not.toBeInTheDocument();
+    expect(screen.queryByText('개발자')).not.toBeInTheDocument();
   });
 
   it('shows admin navigation for admin users', async () => {
@@ -53,5 +54,7 @@ describe('role navigation integration', () => {
     await screen.findByText('Admin 님');
 
     expect(screen.getByText('운영자')).toBeInTheDocument();
+    expect(screen.getByText('개발자')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '개발자' })).toHaveAttribute('href', '/developer');
   });
 });

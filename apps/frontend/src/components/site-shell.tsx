@@ -8,8 +8,8 @@ export function SiteShell({ title, description, children }: { title: string; des
       <header className="topbar">
         <div>
           <div className="brand">KeepIt</div>
-          <h1>{title}</h1>
-          <p>{description}</p>
+          {title ? <h1>{title}</h1> : null}
+          {description ? <p>{description}</p> : null}
         </div>
         <div className="topbar-actions">
           <form method="get" action="/search" className="global-search-form" role="search" aria-label="통합 검색">

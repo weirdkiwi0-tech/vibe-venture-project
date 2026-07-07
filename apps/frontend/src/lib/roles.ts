@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
   { href: '/settings', label: '설정', roles: ['user', 'admin'] as const },
   { href: '/profile', label: '내 프로필', roles: ['user', 'admin'] as const },
   { href: '/admin', label: '운영자', roles: ['admin'] as const },
+  { href: '/developer', label: '개발자', roles: ['admin'] as const },
 ] as const;
 
 export function parseUserRole(input: unknown): UserRole {

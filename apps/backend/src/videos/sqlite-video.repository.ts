@@ -83,7 +83,7 @@ export class SqliteVideoRepository implements VideoRepository {
 
   private mapToEntity(row: any): VideoEntity {
     return VideoEntity.create({
-      id: row.id,
+      id: String(row.rowKey ?? row.RowKey ?? row.id),
       uploaderId: row.uploaderId,
       title: row.title,
       subject: row.subject,

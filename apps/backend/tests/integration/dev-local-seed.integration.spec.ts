@@ -5,6 +5,7 @@ type SeedAccountsFn = (
   input: {
     admin: { email: string; password: string; displayName: string };
     operator: { email: string; password: string; displayName: string };
+    developer?: { email: string; password: string; displayName: string };
   },
 ) => Promise<void>;
 
@@ -26,7 +27,7 @@ describe('dev local seed util (integration)', () => {
 
   beforeEach(() => {
     process.env.AUTH_STORAGE_PROVIDER = 'memory';
-    process.env.GOOGLE_ADMIN_EMAILS = 'admin@keepit.dev,operator@keepit.dev';
+    process.env.GOOGLE_ADMIN_EMAILS = 'admin@keepit.dev,operator@keepit.dev,developer@keepit.dev';
   });
 
   afterEach(() => {
@@ -49,12 +50,19 @@ describe('dev local seed util (integration)', () => {
         password: 'Operator#2026',
         displayName: '운영자2',
       },
+      developer: {
+        email: 'developer@keepit.dev',
+        password: 'Dev!2026',
+        displayName: '개발자',
+      },
     });
 
     const admin = await authService.signInLocal('admin@keepit.dev', 'admin1234');
     const operator = await authService.signInLocal('operator@keepit.dev', 'Operator#2026');
+    const developer = await authService.signInLocal('developer@keepit.dev', 'Dev!2026');
 
     expect(admin.role).toBe('admin');
     expect(operator.role).toBe('admin');
+    expect(developer.role).toBe('admin');
   });
 });

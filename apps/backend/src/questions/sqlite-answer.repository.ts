@@ -97,7 +97,7 @@ export class SqliteAnswerRepository implements AnswerRepository {
 
   private mapToEntity(row: any): AnswerEntity {
     return AnswerEntity.create({
-      id: row.id,
+      id: String(row.rowKey ?? row.RowKey ?? row.id),
       questionId: row.questionId,
       authorId: row.authorId,
       type: row.type,

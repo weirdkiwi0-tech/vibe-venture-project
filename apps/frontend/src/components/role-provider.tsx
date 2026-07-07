@@ -14,7 +14,7 @@ interface RoleContextValue {
     role: UserRole;
   } | null;
   authResolved: boolean;
-  refetchAuth: () => Promise<void>;
+  refetchAuth: () => Promise<boolean>;
 }
 
 interface BanState {
@@ -75,7 +75,7 @@ export function RoleProvider({ initialRole, children }: { initialRole: UserRole;
   const [banState, setBanState] = useState<BanState | null>(null);
   const [logoutCountdown, setLogoutCountdown] = useState<number | null>(null);
 
-  const fetchAuth = useCallback(async () => {
+  const fetchAuth = useCallback(async (): Promise<boolean> => {
     try {
       const result = await getAuthMe();
       if (result.isAuthenticated && result.user) {
@@ -91,15 +91,18 @@ export function RoleProvider({ initialRole, children }: { initialRole: UserRole;
           setBanState((prev) => (prev === null ? prev : null));
           setLogoutCountdown(null);
         }
+        return true;
       } else {
         setAuthUser((prev) => (prev === null ? prev : null));
         setBanState((prev) => (prev === null ? prev : null));
         setLogoutCountdown(null);
+        return false;
       }
     } catch {
       setAuthUser((prev) => (prev === null ? prev : null));
       setBanState((prev) => (prev === null ? prev : null));
       setLogoutCountdown(null);
+      return false;
     } finally {
       setAuthResolved(true);
     }

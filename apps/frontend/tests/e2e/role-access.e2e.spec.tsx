@@ -33,6 +33,7 @@ describe('role access e2e', () => {
 
     expect(screen.getByText('no-admin')).toBeInTheDocument();
     expect(screen.queryByText('운영자')).not.toBeInTheDocument();
+    expect(screen.queryByText('개발자')).not.toBeInTheDocument();
 
     firstRender.unmount();
 
@@ -60,6 +61,7 @@ describe('role access e2e', () => {
 
     expect(screen.getByText('admin-only')).toBeInTheDocument();
     expect(screen.getByText('운영자')).toBeInTheDocument();
+    expect(screen.getByText('개발자')).toBeInTheDocument();
   });
 
   it('shows google login entry when not authenticated', async () => {
