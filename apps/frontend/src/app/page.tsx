@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { SiteShell } from '../components/site-shell';
 import { SectionCard } from '../components/section-card';
-import { StatsStrip } from '../components/stats-strip';
 import { QuestionList, VideoGrid } from '../components/feed-cards';
 import { getHomeFeed } from '../lib/api';
 
@@ -73,14 +72,6 @@ export default async function HomePage() {
         </SectionCard>
       ) : (
         <>
-          <StatsStrip
-            items={[
-              { label: '영상 수', value: String(data.metadata.videoCount), hint: '홈 상단 섹션 기준' },
-              { label: '질문 수', value: String(data.metadata.questionCount), hint: '오늘의 TOP 피드' },
-              { label: '갱신 시각', value: new Date(data.metadata.generatedAt).toLocaleTimeString('ko-KR') },
-            ]}
-          />
-
           <SectionCard eyebrow="영상 TOP" title="오늘의 top 영상">
             <VideoGrid videos={data.feed.videos.slice(0, 3)} />
           </SectionCard>

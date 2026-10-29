@@ -100,6 +100,15 @@ cp .env.example .env.local
 
 - `NEXT_PUBLIC_API_BASE_URL`
 
+### GitHub 업로드 제외 기준
+
+- 실제 환경변수 파일(`.env`, `.env.*`), 개인 키와 인증서 키 파일은 커밋하지 않습니다.
+- `.env.example`, `.env.*.example`에는 실제 비밀값이나 개인정보 없이 설정 예시만 기록합니다.
+- 로컬 데이터(`apps/backend/data/`, SQLite/DB 파일), 로그, `tmp/`, `.azure/`는 업로드하지 않습니다.
+- 의존성과 빌드 결과(`node_modules/`, `.next/`, `dist/`, `coverage/`, `*.tsbuildinfo`)는 제외하고, 소스·테스트·의존성 잠금 파일은 커밋합니다.
+- 푸시 전 `git status --short --ignored`와 `git diff --cached`로 대상을 확인합니다. 이미 추적 중인 파일은 `.gitignore`만으로 제외되지 않습니다.
+- 비밀값이 이미 원격에 올라갔다면 파일 삭제만으로 해결되지 않으므로 해당 자격 증명을 폐기·재발급하고 기록 정리를 별도로 진행합니다.
+
 ### 3) 로컬 실행
 
 백엔드:

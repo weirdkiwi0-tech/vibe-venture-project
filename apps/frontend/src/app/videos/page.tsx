@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SiteShell } from '../../components/site-shell';
@@ -118,7 +119,15 @@ export default function VideosPage() {
 
   return (
     <SiteShell title="모든 풀이 영상보기" description="여태 올라온 영상 풀이를 모아보고, 검색해서 바로 재생할 수 있습니다.">
-      <SectionCard eyebrow="전체 영상" title="영상 검색 및 바로 보기">
+      <SectionCard
+        eyebrow="전체 영상"
+        title="영상 검색 및 바로 보기"
+        action={(
+          <Link href="/videos/new" className="primary-button">
+            영상찍기
+          </Link>
+        )}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();

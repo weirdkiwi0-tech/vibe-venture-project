@@ -8,12 +8,14 @@ import {
   deleteQuestion,
   deleteVideo,
   getCommunityBoard,
+  getCommunityMailbox,
   getCommunityProfile,
   getGoogleAuthUrl,
   getMyAnswers,
   getMyCommunityPosts,
   getMyQuestions,
   getMyVideos,
+  rejectFriendRequest,
   signInLocal,
   signUpLocal,
 } from '../lib/api';
@@ -21,6 +23,7 @@ import { useAuthUser } from './role-provider';
 import type {
   CommunityProfileDetailResponse,
   CommunityProfileSummary,
+  CommunityMailboxResponse,
   MyAnswerItem,
   MyCommunityPostItem,
   MyVideoItem,
@@ -30,7 +33,7 @@ import { DirectChatModal } from './direct-chat-modal';
 import { FriendProfileWindow } from './friend-profile-window';
 
 type ProfileTab = 'activity' | 'friends';
-type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts';
+type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts' | 'mailbox';
 
 const DEFAULT_PROFILE_IMAGE = '/default-profile.svg';
 
@@ -77,8 +80,12 @@ export function ProfilePanel() {
   const [myAnswers, setMyAnswers] = useState<MyAnswerItem[]>([]);
   const [myVideos, setMyVideos] = useState<MyVideoItem[]>([]);
   const [myPosts, setMyPosts] = useState<MyCommunityPostItem[]>([]);
+  const [mailbox, setMailbox] = useState<CommunityMailboxResponse>({ notifications: [], friendRequests: [] });
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState('');
+  const [mailboxLoading, setMailboxLoading] = useState(false);
+  const [mailboxError, setMailboxError] = useState('');
+  const [mailboxActioningId, setMailboxActioningId] = useState<string | null>(null);
 
   // 내 친구
   const [friends, setFriends] = useState<CommunityProfileSummary[]>([]);
@@ -98,7 +105,9 @@ export function ProfilePanel() {
     setMyAnswers([]);
     setMyVideos([]);
     setMyPosts([]);
+    setMailbox({ notifications: [], friendRequests: [] });
     setActivityError('');
+    setMailboxError('');
     setFriends([]);
     setPendingIncoming([]);
     setPendingOutgoing([]);
@@ -167,8 +176,24 @@ export function ProfilePanel() {
       }
     };
 
+    const loadMailbox = async () => {
+      setMailboxLoading(true);
+      setMailboxError('');
+      try {
+        const result = await getCommunityMailbox(authUser.id);
+        if (!mounted) return;
+        setMailbox(result ?? { notifications: [], friendRequests: [] });
+      } catch (err) {
+        if (!mounted) return;
+        setMailboxError(err instanceof Error ? err.message : '우편함을 불러오지 못했습니다.');
+      } finally {
+        if (mounted) setMailboxLoading(false);
+      }
+    };
+
     void loadActivity();
     void loadFriends();
+    void loadMailbox();
 
     return () => { mounted = false; };
   }, [authUser]);
@@ -433,13 +458,38 @@ export function ProfilePanel() {
     setPendingOutgoing([]);
   };
 
+  const handleMailboxRequestAction = async (requestId: string, action: 'accept' | 'reject') => {
+    setMailboxActioningId(requestId);
+    setMailboxError('');
+    try {
+      const input = { requestId, userId: authUser.id };
+      if (action === 'accept') {
+        await acceptFriendRequest(input);
+      } else {
+        await rejectFriendRequest(input);
+      }
+      const result = await getCommunityMailbox(authUser.id);
+      setMailbox(result ?? { notifications: [], friendRequests: [] });
+    } catch (err) {
+      setMailboxError(err instanceof Error ? err.message : '친구요청 처리에 실패했습니다.');
+    } finally {
+      setMailboxActioningId(null);
+    }
+  };
+
   const textAnswers = myAnswers.filter((item) => item.type === 'text');
+  const incomingMailboxRequests = mailbox.friendRequests.filter(
+    (request) => request.status === 'pending' && request.targetId === authUser.id,
+  );
+  const mailboxCount = mailbox.notifications.filter((notification) => !notification.readAt).length
+    + incomingMailboxRequests.length;
 
   const activitySubTabs: Array<{ key: ActivitySubTab; label: string; count: number }> = [
     { key: 'videos', label: '풀이 영상', count: myVideos.length },
     { key: 'questions', label: '질문 작성', count: myQuestions.length },
     { key: 'posts', label: '커뮤니티', count: myPosts.length },
     { key: 'comments', label: '댓글', count: textAnswers.length },
+    { key: 'mailbox', label: '우편함', count: mailboxCount },
   ];
 
   return (
@@ -580,6 +630,48 @@ export function ProfilePanel() {
                       </div>
                     ))
                   )}
+                </div>
+              ) : null}
+
+              {/* 우편함 */}
+              {activitySubTab === 'mailbox' ? (
+                <div className="stack-list profile-content-area">
+                  {mailboxLoading ? <p className="card-meta">우편함을 불러오는 중입니다…</p> : null}
+                  {mailboxError ? <p className="form-message error">{mailboxError}</p> : null}
+                  {!mailboxLoading && !mailboxError && incomingMailboxRequests.length === 0 && mailbox.notifications.length === 0 ? (
+                    <div className="empty-state">새 알림이 없습니다.</div>
+                  ) : null}
+                  {incomingMailboxRequests.map((request) => (
+                    <article key={request.id} className="surface-card profile-activity-item">
+                      <strong>{request.requesterName}</strong>
+                      <p className="card-meta">친구 요청 · {new Date(request.createdAt).toLocaleDateString('ko-KR')}</p>
+                      <div className="hero-actions">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          disabled={mailboxActioningId === request.id}
+                          onClick={() => void handleMailboxRequestAction(request.id, 'accept')}
+                        >
+                          수락
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={mailboxActioningId === request.id}
+                          onClick={() => void handleMailboxRequestAction(request.id, 'reject')}
+                        >
+                          거절
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {mailbox.notifications.map((notification) => (
+                    <article key={notification.id} className="surface-card profile-activity-item">
+                      <strong>{notification.title}</strong>
+                      <p>{notification.message}</p>
+                      <p className="card-meta">{new Date(notification.createdAt).toLocaleDateString('ko-KR')}</p>
+                    </article>
+                  ))}
                 </div>
               ) : null}
 

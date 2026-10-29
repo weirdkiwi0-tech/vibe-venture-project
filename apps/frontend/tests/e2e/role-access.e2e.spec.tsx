@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { RoleProvider } from '../../src/components/role-provider';
 import { RoleGate } from '../../src/components/role-gate';
 import { RoleNavigation } from '../../src/components/role-navigation';
@@ -15,6 +15,9 @@ const mockedGetAuthMe = getAuthMe as jest.MockedFunction<typeof getAuthMe>;
 
 beforeEach(() => {
   mockedGetAuthMe.mockResolvedValue({ isAuthenticated: false });
+  HTMLDialogElement.prototype.showModal = jest.fn(function (this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  });
 });
 
 describe('role access e2e', () => {
@@ -30,6 +33,7 @@ describe('role access e2e', () => {
     );
 
     await screen.findByText('로그인 / 회원가입');
+    fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
 
     expect(screen.getByText('no-admin')).toBeInTheDocument();
     expect(screen.queryByText('운영자')).not.toBeInTheDocument();
@@ -58,6 +62,7 @@ describe('role access e2e', () => {
     );
 
     await screen.findByText('Admin 님');
+    fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
 
     expect(screen.getByText('admin-only')).toBeInTheDocument();
     expect(screen.getByText('운영자')).toBeInTheDocument();

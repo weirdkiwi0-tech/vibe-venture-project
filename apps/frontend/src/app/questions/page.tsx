@@ -44,7 +44,15 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
   return (
     <SiteShell title="질문 목록" description="과목과 학년 기준으로 정리된 질문을 빠르게 탐색합니다.">
       {/* 검색 폼 섹션 */}
-      <SectionCard eyebrow="질문 검색" title="질문 찾기">
+      <SectionCard
+        eyebrow="질문 검색"
+        title="질문 찾기"
+        action={(
+          <Link href="/questions/new" className="primary-button">
+            질문 작성
+          </Link>
+        )}
+      >
         <div className="search-form-container">
           <form method="get" action="/questions" className="search-form">
             <div className="form-group">

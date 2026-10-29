@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getCommunityProfile, sendDirectMessage } from '../lib/api';
 import type { CommunityProfileDetailResponse } from '../lib/types';
 
@@ -69,16 +70,28 @@ export function DirectChatModal({ open, viewerId, target, onClose }: DirectChatM
 
     void load();
 
+    const interval = window.setInterval(async () => {
+      try {
+        const result = await getCommunityProfile(target.id, viewerId);
+        if (mounted) {
+          setDetail(result);
+        }
+      } catch {
+        return;
+      }
+    }, 1000);
+
     return () => {
       mounted = false;
+      window.clearInterval(interval);
     };
   }, [open, target, viewerId]);
 
-  if (!open || !target) {
+  if (!open || !target || typeof document === 'undefined') {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="community-profile-overlay fullscreen" role="presentation" onClick={onClose}>
       <section className="community-chat-window surface-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="community-chat-header">
@@ -174,6 +187,7 @@ export function DirectChatModal({ open, viewerId, target, onClose }: DirectChatM
           )
         ) : null}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

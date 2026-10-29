@@ -6,6 +6,7 @@ const getMyQuestionsMock = jest.fn().mockResolvedValue([]);
 const getMyAnswersMock = jest.fn().mockResolvedValue([]);
 const getMyVideosMock = jest.fn().mockResolvedValue([]);
 const getMyCommunityPostsMock = jest.fn().mockResolvedValue([]);
+const getCommunityMailboxMock = jest.fn().mockResolvedValue({ notifications: [], friendRequests: [] });
 const getCommunityBoardMock = jest.fn().mockResolvedValue({
   posts: [],
   totalPages: 1,
@@ -119,6 +120,7 @@ jest.mock('../../src/lib/api', () => ({
   deleteQuestion: jest.fn(),
   deleteVideo: jest.fn(),
   getCommunityBoard: (...args: unknown[]) => getCommunityBoardMock(...args),
+  getCommunityMailbox: (...args: unknown[]) => getCommunityMailboxMock(...args),
   getCommunityProfile: (...args: unknown[]) => getCommunityProfileMock(...args),
   getGoogleAuthUrl: jest.fn(),
   getMyAnswers: (...args: unknown[]) => getMyAnswersMock(...args),
@@ -126,6 +128,7 @@ jest.mock('../../src/lib/api', () => ({
   getMyQuestions: (...args: unknown[]) => getMyQuestionsMock(...args),
   getMyVideos: (...args: unknown[]) => getMyVideosMock(...args),
   acceptFriendRequest: jest.fn(),
+  rejectFriendRequest: jest.fn(),
   requestFriend: jest.fn(),
   sendDirectMessage: (...args: unknown[]) => sendDirectMessageMock(...args),
   signInLocal: jest.fn(),
@@ -146,6 +149,15 @@ describe('ProfilePanel (unit)', () => {
 
     expect(screen.getByRole('tab', { name: /내 친구/ })).toHaveTextContent('요청 1');
     expect(screen.getByText('받은 친구 요청')).toBeInTheDocument();
+  });
+
+  it('댓글 옆 우편함 탭에서 알림을 확인할 수 있다', async () => {
+    const { user } = renderProfilePanel();
+
+    await screen.findByRole('tab', { name: /댓글/ });
+    await user.click(screen.getByRole('tab', { name: /우편함/ }));
+
+    expect(await screen.findByText('새 알림이 없습니다.')).toBeInTheDocument();
   });
 
   it('친구 프로필 모달에서 1대1채팅하기 버튼을 노출한다', async () => {
@@ -171,6 +183,40 @@ describe('ProfilePanel (unit)', () => {
     expect(screen.getAllByRole('dialog').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('상대 메시지는 왼쪽, 내 메시지는 오른쪽에 표시한다', async () => {
+    const { user } = renderProfilePanel();
+    mockFriendProfiles(
+      friendProfileWithChat,
+      friendProfileWithChat,
+      {
+        ...friendProfileWithChat,
+        messages: [
+          {
+            id: 'dm-incoming',
+            senderId: 'friend-1',
+            recipientId: stableAuthUser.id,
+            content: '상대 메시지',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'dm-outgoing',
+            senderId: stableAuthUser.id,
+            recipientId: 'friend-1',
+            content: '내 메시지',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    );
+
+    await openFriendsTab(user);
+    await openFriendProfile(user);
+    await openDirectChatModal(user);
+
+    expect((await screen.findByText('상대 메시지')).closest('.community-chat-row')).toHaveClass('theirs');
+    expect(screen.getByText('내 메시지').closest('.community-chat-row')).toHaveClass('mine');
+  });
+
   it('채팅 권한이 없으면 입력창과 전송 버튼을 숨긴다', async () => {
     const { user } = renderProfilePanel();
     mockFriendProfiles(friendProfileWithChat, friendProfileWithChat, friendProfileWithoutChat);
@@ -182,6 +228,31 @@ describe('ProfilePanel (unit)', () => {
     expect(await screen.findByText('친구가 아니면 1:1 채팅을 시작할 수 없습니다.')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: '메시지' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '보내기' })).not.toBeInTheDocument();
+  });
+
+  it('채팅창을 열어둔 상태에서 상대가 보낸 메시지를 왼쪽에 추가한다', async () => {
+    const { user } = renderProfilePanel();
+    getCommunityProfileMock.mockResolvedValue(friendProfileWithChat);
+
+    await openFriendsTab(user);
+    await openFriendProfile(user);
+    await openDirectChatModal(user);
+    await screen.findByRole('textbox', { name: '메시지' });
+
+    getCommunityProfileMock.mockResolvedValue({
+      ...friendProfileWithChat,
+      messages: [{
+        id: 'received-later',
+        senderId: 'friend-1',
+        recipientId: stableAuthUser.id,
+        content: '새로 도착한 상대 메시지',
+        createdAt: new Date().toISOString(),
+      }],
+    });
+
+    const received = await screen.findByText('새로 도착한 상대 메시지', {}, { timeout: 2500 });
+    expect(received.closest('.community-chat-row')).toHaveClass('theirs');
+    expect(received.closest('.community-dm-bubble')).toHaveClass('incoming');
   });
 
   it('메시지 전송 성공 시 direct message API 호출 후 프로필을 다시 조회한다', async () => {
