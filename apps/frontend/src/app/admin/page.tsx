@@ -3,11 +3,12 @@ import { SiteShell } from '../../components/site-shell';
 import { SectionCard } from '../../components/section-card';
 import { AdminDashboard } from '../../components/admin-dashboard';
 import { parseUserRole, type UserRole } from '../../lib/roles';
-import { getAdminOverview, getAdminUsers, getSlaBreaches } from '../../lib/api';
+import { getAdminOverview, getAdminUsers, getApiBaseUrl, getSlaBreaches } from '../../lib/api';
 
 async function getAuthMeServerSide(sessionCookie: string): Promise<{ role: UserRole; isAuthenticated: boolean } | null> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend.blackpond-7507d149.koreacentral.azurecontainerapps.io'}/auth/me`, {
+    const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || getApiBaseUrl();
+    const response = await fetch(`${backendBaseUrl}/auth/me`, {
       method: 'GET',
       headers: {
         'cookie': sessionCookie ? `keepit-session=${sessionCookie}` : '',

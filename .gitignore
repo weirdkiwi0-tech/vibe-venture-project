@@ -1,9 +1,17 @@
+# Local deployment state
 .azure
+
+# Dependencies, builds, and test output
 **/node_modules/
 **/.next/
 **/dist/
 **/coverage/
 **/*.tsbuildinfo
+**/playwright-report/
+**/test-results/
+**/playwright/.auth/
+
+# Local databases and runtime files
 apps/backend/data/
 **/*.sqlite
 **/*.sqlite-shm
@@ -15,6 +23,11 @@ apps/backend/data/
 *.log
 .DS_Store
 tmp/
+*.har
+*.heapsnapshot
+*.cpuprofile
+
+# Secrets (keep sanitized environment templates)
 .env
 .env.*
 !.env.example

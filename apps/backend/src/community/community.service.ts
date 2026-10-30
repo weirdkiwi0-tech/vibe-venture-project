@@ -48,6 +48,7 @@ interface CommunityPostCommentRecord {
   createdAt: string;
 }
 
+const ANONYMOUS_AUTHOR_ID = 'anonymous';
 const ANONYMOUS_AUTHOR_NAME = '익명';
 const ANONYMOUS_AUTHOR_AVATAR = '익';
 const DEFAULT_PROFILE_FALLBACK: Record<string, { name: string; avatar: string }> = {
@@ -82,6 +83,8 @@ export class CommunityService {
     const safePage = Math.min(Math.max(1, page), totalPages);
     const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
+    await Promise.all(paginated.map((post) => this.enrichProfileFromAuth(post.authorId)));
+
     const posts: CommunityPostSummary[] = paginated.map((post) => this.mapPostSummary(post));
     const friends: CommunityFriendItem[] = this.getFriendList(currentUserId);
 
@@ -92,7 +95,7 @@ export class CommunityService {
     input: { title: string; content: string; attachments?: string[]; authorVisibility?: 'nickname' | 'anonymous' },
     authorId = 'student-jun',
   ): Promise<CommunityPostDetail> {
-    this.requireProfile(authorId);
+    await this.enrichProfileFromAuth(authorId);
 
     const post: CommunityPost = {
       id: randomUUID(),
@@ -130,6 +133,7 @@ export class CommunityService {
     post.title = title;
     post.content = content;
 
+    await this.enrichProfileFromAuth(post.authorId);
     return this.mapPostDetail(post, requestUserId);
   }
 
@@ -139,14 +143,16 @@ export class CommunityService {
       throw new NotFoundException('post not found');
     }
 
-    if (this.shouldIncreaseViewCount(currentUserId)) {
+    if (this.shouldIncreaseViewCount(post.authorId, currentUserId)) {
       post.viewCount += 1;
     }
 
+    await this.enrichProfileFromAuth(post.authorId);
     return this.mapPostDetail(post, currentUserId ?? 'anonymous-user');
   }
 
   async getMyPosts(currentUserId = 'student-jun'): Promise<CommunityPostDetail[]> {
+    await this.enrichProfileFromAuth(currentUserId);
     return this.posts
       .filter((post) => post.authorId === currentUserId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -155,24 +161,14 @@ export class CommunityService {
 
   async getPostComments(postId: string, currentUserId?: string): Promise<CommunityPostComment[]> {
     this.requirePost(postId);
-    return this.buildCommentTree(this.postComments.get(postId) ?? [], currentUserId ?? 'anonymous-user');
+    const records = this.postComments.get(postId) ?? [];
+    await Promise.all(records.map((record) => this.enrichProfileFromAuth(record.authorId)));
+    return this.buildCommentTree(records, currentUserId ?? 'anonymous-user');
   }
 
   async getProfile(profileId: string, currentUserId?: string): Promise<CommunityProfileDetail> {
-    const profile = this.requireProfile(profileId);
+    const profile = await this.enrichProfileFromAuth(profileId);
     const viewerId = currentUserId ?? 'anonymous-user';
-
-    // Enrich profile with real auth data when available
-    const authUser = await this.authService.getUserById(profileId);
-    if (authUser) {
-      if (authUser.displayName && authUser.displayName !== profile.name) {
-        profile.name = authUser.displayName;
-        profile.avatar = authUser.displayName.trim().slice(0, 1).toUpperCase() || profile.avatar;
-      }
-      if (authUser.photoUrl) {
-        profile.photoUrl = authUser.photoUrl;
-      }
-    }
     const requests = this.friendRequests.filter(
       (request) =>
         request.status === 'pending' &&
@@ -284,7 +280,7 @@ export class CommunityService {
     authorId: string,
   ): Promise<CommunityPostComment> {
     const post = this.requirePost(postId);
-    this.requireProfile(authorId);
+    await this.enrichProfileFromAuth(authorId);
 
     const content = input.content.trim();
     if (!content) {
@@ -296,16 +292,15 @@ export class CommunityService {
       throw new NotFoundException('parent comment not found');
     }
 
-    const profile = this.findProfile(authorId);
     const authorVisibility = input.authorVisibility ?? 'nickname';
-    const isAnonymous = authorVisibility === 'anonymous';
+    const authorPresentation = this.resolveAuthorPresentation(authorId, authorVisibility);
     const comment: CommunityPostCommentRecord = {
       id: randomUUID(),
       postId: post.id,
       authorId,
-      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
-      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
-      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorName: authorPresentation.authorName,
+      authorAvatar: authorPresentation.authorAvatar,
+      authorPhotoUrl: authorPresentation.authorPhotoUrl,
       authorVisibility,
       content,
       parentCommentId: input.parentCommentId ?? null,
@@ -342,8 +337,13 @@ export class CommunityService {
       throw new BadRequestException('comment content is required');
     }
 
+    await this.enrichProfileFromAuth(comment.authorId);
+    const authorPresentation = this.resolveAuthorPresentation(comment.authorId, comment.authorVisibility);
     const updated: CommunityPostCommentRecord = {
       ...comment,
+      authorName: authorPresentation.authorName,
+      authorAvatar: authorPresentation.authorAvatar,
+      authorPhotoUrl: authorPresentation.authorPhotoUrl,
       content,
     };
     comments[commentIndex] = updated;
@@ -543,9 +543,25 @@ export class CommunityService {
     };
   }
 
+  private resolveAuthorPresentation(
+    authorId: string,
+    authorVisibility: 'nickname' | 'anonymous',
+  ): {
+    authorName: string;
+    authorAvatar: string;
+    authorPhotoUrl?: string;
+  } {
+    const profile = this.findProfile(authorId);
+    const isAnonymous = authorVisibility === 'anonymous';
+    return {
+      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
+      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
+      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+    };
+  }
+
   private mapPostSummary(post: CommunityPost): CommunityPostSummary {
-    const profile = this.findProfile(post.authorId);
-    const isAnonymous = post.authorVisibility === 'anonymous';
+    const authorPresentation = this.resolveAuthorPresentation(post.authorId, post.authorVisibility);
     return {
       id: post.id,
       title: post.title,
@@ -553,16 +569,15 @@ export class CommunityService {
       likeCount: post.likeCount,
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
-      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
-      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
-      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorName: authorPresentation.authorName,
+      authorAvatar: authorPresentation.authorAvatar,
+      authorPhotoUrl: authorPresentation.authorPhotoUrl,
       authorVisibility: post.authorVisibility,
     };
   }
 
   private mapPostDetail(post: CommunityPost, currentUserId: string): CommunityPostDetail {
-    const profile = this.findProfile(post.authorId);
-    const isAnonymous = post.authorVisibility === 'anonymous';
+    const authorPresentation = this.resolveAuthorPresentation(post.authorId, post.authorVisibility);
     return {
       id: post.id,
       title: post.title,
@@ -572,16 +587,16 @@ export class CommunityService {
       likeCount: post.likeCount,
       createdAt: post.createdAt.toISOString(),
       authorId: post.authorId,
-      authorName: isAnonymous ? ANONYMOUS_AUTHOR_NAME : profile?.name ?? '알 수 없음',
-      authorAvatar: isAnonymous ? ANONYMOUS_AUTHOR_AVATAR : profile?.avatar ?? 'U',
-      authorPhotoUrl: isAnonymous ? undefined : profile?.photoUrl,
+      authorName: authorPresentation.authorName,
+      authorAvatar: authorPresentation.authorAvatar,
+      authorPhotoUrl: authorPresentation.authorPhotoUrl,
       authorVisibility: post.authorVisibility,
       isMine: post.authorId === currentUserId,
     };
   }
 
-  private shouldIncreaseViewCount(currentUserId?: string): boolean {
-    return true;
+  private shouldIncreaseViewCount(authorId: string, currentUserId?: string): boolean {
+    return !(Boolean(currentUserId) && currentUserId === authorId);
   }
 
   private requirePost(postId: string): CommunityPost {
@@ -655,13 +670,14 @@ export class CommunityService {
     viewerId: string,
     replies: CommunityPostComment[],
   ): CommunityPostComment {
+    const authorPresentation = this.resolveAuthorPresentation(record.authorId, record.authorVisibility);
     return {
       id: record.id,
       postId: record.postId,
-      authorId: record.authorId,
-      authorName: record.authorName,
-      authorAvatar: record.authorAvatar,
-      authorPhotoUrl: record.authorPhotoUrl,
+      authorId: record.authorVisibility === 'anonymous' ? ANONYMOUS_AUTHOR_ID : record.authorId,
+      authorName: authorPresentation.authorName,
+      authorAvatar: authorPresentation.authorAvatar,
+      authorPhotoUrl: authorPresentation.authorPhotoUrl,
       authorVisibility: record.authorVisibility,
       content: record.content,
       parentCommentId: record.parentCommentId,
@@ -686,6 +702,21 @@ export class CommunityService {
 
   private resolveSubjects(profileId: string) {
     return profileId.startsWith('mentor') ? ['수학', '과학'] : ['수학', '영어'];
+  }
+
+  private async enrichProfileFromAuth(id: string): Promise<CommunityProfile> {
+    const profile = this.requireProfile(id);
+    const authUser = await Promise.resolve(this.authService.getUserById(id)).catch(() => undefined);
+    if (authUser) {
+      if (authUser.displayName && authUser.displayName !== profile.name) {
+        profile.name = authUser.displayName;
+        profile.avatar = authUser.displayName.trim().slice(0, 1).toUpperCase() || profile.avatar;
+      }
+      if (authUser.photoUrl) {
+        profile.photoUrl = authUser.photoUrl;
+      }
+    }
+    return profile;
   }
 
   private requireProfile(id: string): CommunityProfile {

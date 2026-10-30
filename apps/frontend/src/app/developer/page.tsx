@@ -3,11 +3,13 @@ import type { Route } from 'next';
 import { cookies } from 'next/headers';
 import { SiteShell } from '../../components/site-shell';
 import { SectionCard } from '../../components/section-card';
+import { getApiBaseUrl } from '../../lib/api';
 import { parseUserRole, type UserRole } from '../../lib/roles';
 
 async function getAuthMeServerSide(sessionCookie: string): Promise<{ role: UserRole; isAuthenticated: boolean } | null> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend.blackpond-7507d149.koreacentral.azurecontainerapps.io'}/auth/me`, {
+    const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || getApiBaseUrl();
+    const response = await fetch(`${backendBaseUrl}/auth/me`, {
       method: 'GET',
       headers: {
         cookie: sessionCookie ? `keepit-session=${sessionCookie}` : '',

@@ -6,6 +6,7 @@ import { SectionCard } from '../../../components/section-card';
 import { ReportFormWithDefaults } from '../../../components/forms';
 import { useAuthUser } from '../../../components/role-provider';
 import { createReport } from '../../../lib/api';
+import { normalizeReportTargetType } from '../../../lib/report-links';
 
 export default function NewReportPage() {
   const searchParams = useSearchParams();
@@ -19,15 +20,7 @@ export default function NewReportPage() {
   const source = searchParams.get('source');
 
   const initialValues = {
-    targetType: targetType === 'answer'
-      ? 'answer'
-      : targetType === 'video'
-        ? 'video'
-        : targetType === 'comment'
-          ? 'comment'
-          : targetType === 'community-post'
-            ? 'community-post'
-          : 'question',
+    targetType: normalizeReportTargetType(targetType),
     targetId: targetId ?? '',
     reason: reason ?? '',
     details: details ?? '',
@@ -37,7 +30,7 @@ export default function NewReportPage() {
 
   const submitReport = async (formData: FormData) => {
     await createReport({
-      targetType: String(formData.get('targetType') ?? 'question') as 'question' | 'answer' | 'video' | 'comment' | 'community-post',
+      targetType: normalizeReportTargetType(String(formData.get('targetType') ?? 'question')),
       targetId: String(formData.get('targetId') ?? ''),
       reason: String(formData.get('reason') ?? ''),
       details: String(formData.get('details') ?? ''),

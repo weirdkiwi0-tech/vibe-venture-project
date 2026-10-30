@@ -156,30 +156,37 @@ export function ReportFormWithDefaults({
   const [detailsValue, setDetailsValue] = useState(initialValues?.details ?? '');
   const [detailsInvalid, setDetailsInvalid] = useState(false);
   const isLoading = result.status === 'loading';
+  const hasPrefilledDetails = Boolean(initialValues?.details?.trim());
+
+  const handleSubmit = async (formData: FormData) => {
+    const details = String(formData.get('details') ?? '').trim();
+    const minDetailsLength = hasPrefilledDetails ? 1 : 20;
+    if (details.length < minDetailsLength) {
+      setDetailsInvalid(true);
+      setResult({ status: 'error', message: '상세사유를 적어주세요. (20자 이상)' });
+      return;
+    }
+
+    setResult({ status: 'loading', message: '신고를 접수하는 중입니다.' });
+    try {
+      await onSubmit(formData);
+      setDetailsInvalid(false);
+      setResult({ status: 'success', message: '신고가 접수되었습니다.' });
+      if (redirectOnSuccessTo) {
+        router.push(redirectOnSuccessTo as Route);
+        router.refresh();
+      }
+    } catch {
+      setResult({ status: 'error', message: '신고 접수에 실패했습니다.' });
+    }
+  };
 
   return (
     <form
       className="form-grid"
-      action={async (formData) => {
-        const details = String(formData.get('details') ?? '').trim();
-        if (details.length < 20) {
-          setDetailsInvalid(true);
-          setResult({ status: 'error', message: '상세사유를 적어주세요. (20자 이상)' });
-          return;
-        }
-
-        setResult({ status: 'loading', message: '신고를 접수하는 중입니다.' });
-        try {
-          await onSubmit(formData);
-          setDetailsInvalid(false);
-          setResult({ status: 'success', message: '신고가 접수되었습니다.' });
-          if (redirectOnSuccessTo) {
-            router.push(redirectOnSuccessTo as Route);
-            router.refresh();
-          }
-        } catch {
-          setResult({ status: 'error', message: '신고 접수에 실패했습니다.' });
-        }
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleSubmit(new FormData(event.currentTarget));
       }}
     >
       {initialValues?.sourceLabel ? <p className="auth-status">신고 대상: {initialValues.sourceLabel}</p> : null}

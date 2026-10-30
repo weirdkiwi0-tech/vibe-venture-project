@@ -442,5 +442,84 @@ describe('Community API (e2e)', () => {
       expect(post.body.authorVisibility).toBe('anonymous');
       expect(post.body.authorName).toBe('익명');
     });
+
+    it('게시글/댓글 수정·좋아요·내 글 조회·삭제 및 작성자 본인 조회수 미증가, 익명 댓글 authorId 마스킹을 보장한다', async () => {
+      const author = await signUpUser('crud-lifecycle-author', '작성자');
+      const otherUser = await signUpUser('crud-lifecycle-other', '다른사용자');
+
+      const created = await request(app.getHttpServer())
+        .post('/community/posts')
+        .set('x-user-id', author.id)
+        .send({ title: '초기 게시글 제목', content: '초기 게시글 본문' });
+      expect(created.status).toBe(201);
+      const postId = created.body.id as string;
+
+      const selfView = await request(app.getHttpServer())
+        .get(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', author.id);
+      expect(selfView.status).toBe(200);
+      expect(selfView.body.viewCount).toBe(0);
+
+      const otherView = await request(app.getHttpServer())
+        .get(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', otherUser.id);
+      expect(otherView.status).toBe(200);
+      expect(otherView.body.viewCount).toBe(1);
+
+      const forbiddenPatch = await request(app.getHttpServer())
+        .patch(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', otherUser.id)
+        .send({ title: '무단 수정', content: '무단 본문' });
+      expect(forbiddenPatch.status).toBe(403);
+
+      const updatedPost = await request(app.getHttpServer())
+        .patch(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', author.id)
+        .send({ title: '수정된 게시글 제목', content: '수정된 게시글 본문' });
+      expect(updatedPost.status).toBe(200);
+      expect(updatedPost.body.title).toBe('수정된 게시글 제목');
+      expect(updatedPost.body.content).toBe('수정된 게시글 본문');
+
+      const createdComment = await request(app.getHttpServer())
+        .post(`/community/posts/${encodeURIComponent(postId)}/comments`)
+        .set('x-user-id', author.id)
+        .send({ content: '익명 댓글 초안', authorVisibility: 'anonymous' });
+      expect(createdComment.status).toBe(201);
+      expect(createdComment.body.authorId).toBe('anonymous');
+      expect(createdComment.body.isMine).toBe(true);
+      const commentId = createdComment.body.id as string;
+
+      const updatedComment = await request(app.getHttpServer())
+        .patch(`/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`)
+        .set('x-user-id', author.id)
+        .send({ content: '익명 댓글 수정본' });
+      expect(updatedComment.status).toBe(200);
+      expect(updatedComment.body.content).toBe('익명 댓글 수정본');
+      expect(updatedComment.body.authorId).toBe('anonymous');
+
+      const likedComment = await request(app.getHttpServer())
+        .post(`/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`)
+        .set('x-user-id', otherUser.id);
+      expect([200, 201]).toContain(likedComment.status);
+      expect(likedComment.body).toEqual({ liked: true, likeCount: 1 });
+
+      const myPosts = await request(app.getHttpServer())
+        .get('/community/my/posts')
+        .set('x-user-id', author.id);
+      expect(myPosts.status).toBe(200);
+      expect(Array.isArray(myPosts.body)).toBe(true);
+      expect(myPosts.body.some((item: { id: string }) => item.id === postId)).toBe(true);
+
+      const forbiddenDelete = await request(app.getHttpServer())
+        .delete(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', otherUser.id);
+      expect(forbiddenDelete.status).toBe(403);
+
+      const deleted = await request(app.getHttpServer())
+        .delete(`/community/posts/${encodeURIComponent(postId)}`)
+        .set('x-user-id', author.id);
+      expect(deleted.status).toBe(200);
+      expect(deleted.body).toEqual({ success: true });
+    });
   });
 });

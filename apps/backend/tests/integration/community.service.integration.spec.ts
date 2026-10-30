@@ -164,4 +164,68 @@ describe('CommunityService (integration)', () => {
     expect(profile.messages[0].content).toBe('안녕 민지!');
     expect(profile.profile.lastMessagePreview).toBe('안녕 민지!');
   });
+
+  it('supports full post/comment lifecycle with author self-view guard and anonymous authorId masking', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+
+    const post = await service.createPost(
+      {
+        title: '초기 제목',
+        content: '초기 내용',
+      },
+      'student-jun',
+    );
+
+    const authorView = await service.getPostDetail(post.id, 'student-jun');
+    expect(authorView.viewCount).toBe(0);
+    expect(authorView.isMine).toBe(true);
+
+    const friendView = await service.getPostDetail(post.id, 'friend-user');
+    expect(friendView.viewCount).toBe(1);
+    expect(friendView.isMine).toBe(false);
+
+    const updatedPost = await service.updatePost(
+      post.id,
+      { title: '변경된 제목', content: '변경된 내용' },
+      'student-jun',
+    );
+    expect(updatedPost.title).toBe('변경된 제목');
+    expect(updatedPost.content).toBe('변경된 내용');
+
+    const comment = await service.createPostComment(
+      post.id,
+      {
+        content: '익명 초기 댓글',
+        authorVisibility: 'anonymous',
+      },
+      'student-jun',
+    );
+    expect(comment.authorId).toBe('anonymous');
+    expect(comment.authorName).toBe('익명');
+    expect(comment.isMine).toBe(true);
+
+    const updatedComment = await service.updatePostComment(
+      post.id,
+      comment.id,
+      { content: '익명 수정 댓글' },
+      'student-jun',
+    );
+    expect(updatedComment.content).toBe('익명 수정 댓글');
+    expect(updatedComment.authorId).toBe('anonymous');
+
+    const firstLike = await service.likePostComment(post.id, comment.id, 'friend-user');
+    expect(firstLike).toEqual({ liked: true, likeCount: 1 });
+
+    const secondLike = await service.likePostComment(post.id, comment.id, 'friend-user');
+    expect(secondLike).toEqual({ liked: false, likeCount: 0 });
+
+    const myPosts = await service.getMyPosts('student-jun');
+    expect(myPosts).toHaveLength(1);
+    expect(myPosts[0].id).toBe(post.id);
+    expect(myPosts[0].title).toBe('변경된 제목');
+
+    await service.deletePost(post.id, 'student-jun');
+    const afterDelete = await service.getMyPosts('student-jun');
+    expect(afterDelete).toHaveLength(0);
+  });
 });

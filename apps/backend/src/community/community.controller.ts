@@ -33,6 +33,12 @@ export class CommunityController {
     return headerUser?.id;
   }
 
+  private async resolveViewerId(req: Request, headerUserId?: string) {
+    const sessionId = req.cookies?.['keepit-session'] as string | undefined;
+    const sessionUser = await this.authService.getUserBySessionId(sessionId);
+    return sessionUser?.id ?? headerUserId;
+  }
+
   @Get()
   async getBoard(
     @Query('page') page?: string,
@@ -173,9 +179,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = await this.authService.getUserBySessionId(sessionId);
-    const userId = sessionUser?.id ?? userIdHeader;
+    const userId = await this.resolveViewerId(req, userIdHeader);
     if (!userId) {
       throw new UnauthorizedException('login required to like post');
     }
@@ -189,9 +193,7 @@ export class CommunityController {
     @Req() req: Request,
     @Headers('x-user-id') userIdHeader?: string,
   ) {
-    const sessionId = req.cookies?.['keepit-session'] as string | undefined;
-    const sessionUser = await this.authService.getUserBySessionId(sessionId);
-    const requestUserId = sessionUser?.id ?? userIdHeader;
+    const requestUserId = await this.resolveViewerId(req, userIdHeader);
     await this.communityService.deletePost(id, requestUserId);
     return { success: true };
   }

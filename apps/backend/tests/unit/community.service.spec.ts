@@ -47,6 +47,23 @@ describe('CommunityService (unit)', () => {
     expect(viewed.viewCount).toBe(1);
   });
 
+  it('does not increase post viewCount when the author views their own post', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+    const created = await service.createPost(
+      {
+        title: 'author self-view post',
+        content: 'content',
+      },
+      'author-user',
+    );
+
+    const selfView = await service.getPostDetail(created.id, 'author-user');
+    expect(selfView.viewCount).toBe(0);
+
+    const otherView = await service.getPostDetail(created.id, 'viewer-user');
+    expect(otherView.viewCount).toBe(1);
+  });
+
   it('masks avatar and photo when anonymous comments are created and listed', async () => {
     const service = new CommunityService(createAuthServiceMock());
     const createdPost = await service.createPost(
@@ -67,16 +84,78 @@ describe('CommunityService (unit)', () => {
     );
 
     expect(createdComment.authorVisibility).toBe('anonymous');
+    expect(createdComment.authorId).toBe('anonymous');
     expect(createdComment.authorName).toBe('익명');
     expect(createdComment.authorAvatar).toBe('익');
     expect(createdComment.authorPhotoUrl).toBeUndefined();
+    expect(createdComment.isMine).toBe(true);
 
     const listed = await service.getPostComments(createdPost.id, 'viewer-user');
     expect(listed).toHaveLength(1);
     expect(listed[0].authorVisibility).toBe('anonymous');
+    expect(listed[0].authorId).toBe('anonymous');
     expect(listed[0].authorName).toBe('익명');
     expect(listed[0].authorAvatar).toBe('익');
     expect(listed[0].authorPhotoUrl).toBeUndefined();
+    expect(listed[0].isMine).toBe(false);
+  });
+
+  it('supports updating post, updating comment, toggling comment likes, listing my posts, and deleting post with author/admin checks', async () => {
+    const service = new CommunityService(createAuthServiceMock());
+    const createdPost = await service.createPost(
+      {
+        title: '원본 제목',
+        content: '원본 내용',
+      },
+      'author-user',
+    );
+
+    await expect(
+      service.updatePost(createdPost.id, { title: '권한 없음', content: '수정 불가' }, 'viewer-user'),
+    ).rejects.toThrow('only author can edit post');
+
+    const updatedPost = await service.updatePost(
+      createdPost.id,
+      { title: '수정된 제목', content: '수정된 내용' },
+      'author-user',
+    );
+    expect(updatedPost.title).toBe('수정된 제목');
+    expect(updatedPost.content).toBe('수정된 내용');
+
+    const comment = await service.createPostComment(
+      createdPost.id,
+      { content: '첫 댓글', authorVisibility: 'anonymous' },
+      'author-user',
+    );
+
+    await expect(
+      service.updatePostComment(createdPost.id, comment.id, { content: '타인 댓글 수정' }, 'viewer-user'),
+    ).rejects.toThrow('only author can edit comment');
+
+    const updatedComment = await service.updatePostComment(
+      createdPost.id,
+      comment.id,
+      { content: '수정된 댓글' },
+      'author-user',
+    );
+    expect(updatedComment.content).toBe('수정된 댓글');
+    expect(updatedComment.authorId).toBe('anonymous');
+
+    const likedComment = await service.likePostComment(createdPost.id, comment.id, 'viewer-user');
+    expect(likedComment).toEqual({ liked: true, likeCount: 1 });
+
+    const unlikedComment = await service.likePostComment(createdPost.id, comment.id, 'viewer-user');
+    expect(unlikedComment).toEqual({ liked: false, likeCount: 0 });
+
+    const myPosts = await service.getMyPosts('author-user');
+    expect(myPosts).toHaveLength(1);
+    expect(myPosts[0].id).toBe(createdPost.id);
+    expect(myPosts[0].title).toBe('수정된 제목');
+
+    await expect(service.deletePost(createdPost.id, 'viewer-user')).rejects.toThrow('only author can delete post');
+    await service.deletePost(createdPost.id, 'author-user');
+
+    await expect(service.getPostDetail(createdPost.id, 'viewer-user')).rejects.toThrow('post not found');
   });
 
   it('shows pending friend request notification only in receiver mailbox', async () => {

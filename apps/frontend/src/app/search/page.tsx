@@ -90,7 +90,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                     </div>
                     <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount}</p>
                     <div className="hero-actions">
-                      <Link className="secondary-button" href="/community">커뮤니티에서 보기</Link>
+                      <Link className="secondary-button" href={`/community/posts/${item.id}`}>커뮤니티에서 보기</Link>
                     </div>
                   </article>
                 ))}

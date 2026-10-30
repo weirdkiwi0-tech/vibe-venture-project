@@ -19,10 +19,16 @@ export const DEFAULT_COMMUNITY_PREFERENCES: CommunityPreferences = {
 };
 
 export function normalizeCommunityPreferences(value: unknown): CommunityPreferences {
-  const parsed = (value ?? {}) as Partial<CommunityPreferences>;
+  const parsed = typeof value === 'object' && value !== null ? (value as Partial<CommunityPreferences>) : {};
   return {
-    pushNotifications: parsed.pushNotifications ?? DEFAULT_COMMUNITY_PREFERENCES.pushNotifications,
-    communityOnlyMode: parsed.communityOnlyMode ?? DEFAULT_COMMUNITY_PREFERENCES.communityOnlyMode,
+    pushNotifications:
+      typeof parsed.pushNotifications === 'boolean'
+        ? parsed.pushNotifications
+        : DEFAULT_COMMUNITY_PREFERENCES.pushNotifications,
+    communityOnlyMode:
+      typeof parsed.communityOnlyMode === 'boolean'
+        ? parsed.communityOnlyMode
+        : DEFAULT_COMMUNITY_PREFERENCES.communityOnlyMode,
     profileVisibility: parsed.profileVisibility === 'friends' ? 'friends' : 'public',
     communityAuthorVisibility: parsed.communityAuthorVisibility === 'anonymous' ? 'anonymous' : 'nickname',
   };
