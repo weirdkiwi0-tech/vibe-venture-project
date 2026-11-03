@@ -31,6 +31,7 @@ import type {
 } from '../lib/types';
 import { DirectChatModal } from './direct-chat-modal';
 import { FriendProfileWindow } from './friend-profile-window';
+import { prepareProfilePhoto } from '../lib/uploads';
 
 type ProfileTab = 'activity' | 'friends';
 type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts' | 'mailbox';
@@ -307,7 +308,7 @@ export function ProfilePanel() {
                 type="file"
                 accept="image/*"
                 disabled={loading}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) {
                     setPhotoFileName('선택된 파일 없음');
@@ -316,12 +317,18 @@ export function ProfilePanel() {
                   }
 
                   setPhotoFileName(file.name);
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const result = typeof reader.result === 'string' ? reader.result : '';
-                    setFormData((prev) => ({ ...prev, photoUrl: result }));
-                  };
-                  reader.readAsDataURL(file);
+                  setLoading(true);
+                  setError('');
+                  try {
+                    const photoUrl = await prepareProfilePhoto(file);
+                    setFormData((prev) => ({ ...prev, photoUrl }));
+                  } catch (error) {
+                    setFormData((prev) => ({ ...prev, photoUrl: '' }));
+                    setPhotoFileName('선택된 파일 없음');
+                    setError(error instanceof Error ? error.message : '사진을 처리하지 못했습니다.');
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
               />
               <div className="file-picker-row">
@@ -815,6 +822,7 @@ export function ProfilePanel() {
       <FriendProfileWindow
         open={Boolean(selectedFriendProfile)}
         profile={selectedFriendProfile}
+        viewerId={authUser.id}
         onClose={() => setSelectedFriendProfile(null)}
         onStartChat={() => {
           if (!selectedFriendProfile) return;

@@ -133,14 +133,14 @@ export default function VideosPage() {
             event.preventDefault();
             setSearch(searchInput.trim());
           }}
-          style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem' }}
+          className="inline-search-form"
         >
           <input
             type="text"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             placeholder="제목으로 검색 (예: 수학, 함수, 영어)"
-            style={{ flex: 1 }}
+            className="search-input"
           />
           <button type="submit" className="primary-button">검색</button>
         </form>

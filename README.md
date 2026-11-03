@@ -135,6 +135,17 @@ npm run dev
 
 ## 테스트
 
+### File Uploads
+
+- Questions, answers, comments, and videos upload files using authenticated `POST /uploads` multipart requests. Records store file URLs, not Base64 payloads.
+- Supported formats: JPEG, PNG, WebP, GIF, MP4, MOV, WebM, PDF. Images/documents: 10 MiB per file; videos: 30 MiB; attachments: up to four files. HEIC must be exported as JPEG first.
+- File signatures and declared types are checked on the server. Upload progress, timeout messages, and retrying a failed form without re-uploading completed files are supported.
+- Development stores files under `UPLOADS_DIR` (default: `apps/backend/data/uploads` when started from the backend directory). Keep this directory to preserve uploads across restarts.
+- Production requires Blob storage. Prefer `AZURE_STORAGE_ACCOUNT_URL` with managed identity and the `Storage Blob Data Contributor` role. `AZURE_BLOB_CONNECTION_STRING` or the existing `AZURE_TABLES_CONNECTION_STRING` can be used as a compatibility fallback. Do not commit credentials.
+- `AZURE_UPLOADS_CONTAINER` defaults to `keepit-uploads`. Blobs remain private; the API serves media through `GET /uploads/:name` with HTTP Range support for video seeking. File URLs are public capability URLs for shared posts; do not upload private chat documents here.
+- Production without Blob configuration returns an error instead of using ephemeral local disk. Ensure the API ingress accepts multipart requests of at least 31 MiB and allows sufficient upload time.
+- Signup profile photos are resized to JPEG previews of at most 256 pixels and 24,000 URL characters. Existing Base64 attachments remain readable; previously failed or corrupt media must be uploaded again.
+
 ### 백엔드
 
 ```bash

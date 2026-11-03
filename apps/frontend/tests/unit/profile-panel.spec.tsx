@@ -127,6 +127,7 @@ jest.mock('../../src/lib/api', () => ({
   getMyCommunityPosts: (...args: unknown[]) => getMyCommunityPostsMock(...args),
   getMyQuestions: (...args: unknown[]) => getMyQuestionsMock(...args),
   getMyVideos: (...args: unknown[]) => getMyVideosMock(...args),
+  getPublicProfileActivity: jest.fn().mockResolvedValue({ posts: [], questions: [], videos: [] }),
   acceptFriendRequest: jest.fn(),
   rejectFriendRequest: jest.fn(),
   requestFriend: jest.fn(),

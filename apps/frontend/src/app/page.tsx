@@ -72,7 +72,15 @@ export default async function HomePage() {
         </SectionCard>
       ) : (
         <>
-          <SectionCard eyebrow="영상 TOP" title="오늘의 top 영상">
+          <SectionCard
+            eyebrow="영상 TOP"
+            title="오늘의 top 영상"
+            action={
+              <Link href="/videos" className="secondary-button">
+                모든 영상 보기
+              </Link>
+            }
+          >
             <VideoGrid videos={data.feed.videos.slice(0, 3)} />
           </SectionCard>
 

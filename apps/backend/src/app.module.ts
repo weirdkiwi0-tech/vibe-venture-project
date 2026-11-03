@@ -11,6 +11,7 @@ import { QuestionsModule } from './questions';
 import { ReportsModule } from './reports';
 import { RewardsModule } from './rewards';
 import { VideosModule } from './videos';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { VideosModule } from './videos';
     MentoringModule,
     VideosModule,
     RewardsModule,
+    UploadsModule,
   ],
 })
 export class AppModule implements OnModuleInit {

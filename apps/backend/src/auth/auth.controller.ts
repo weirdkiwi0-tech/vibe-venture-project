@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import { ROLE_COOKIE_NAME } from './auth.constants';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth.guard';
+import { getLocalAccountFrontendUrl } from '../local-account-origin';
 
 interface GoogleAuthUser {
   googleId: string;
@@ -30,6 +31,7 @@ class LocalSignUpDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(30000, { message: '프로필 사진이 너무 큽니다. 사진을 다시 선택해주세요.' })
   photoUrl?: string;
 }
 
@@ -278,6 +280,7 @@ export class AuthController {
 
   private buildFrontendCallbackUrl(req: Request, isNewUser: boolean, message?: string): string {
     const frontendBaseUrl =
+      getLocalAccountFrontendUrl(req.hostname, process.env.FRONTEND_BASE_URL) ??
       process.env.FRONTEND_BASE_URL ?? inferFrontendBaseUrlFromBackendHost(req) ?? 'http://localhost:3000';
     const callbackUrl = new URL('/auth/callback', frontendBaseUrl);
     callbackUrl.searchParams.set('newUser', String(isNewUser));

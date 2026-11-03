@@ -143,6 +143,12 @@ export interface CommunityProfileDetailResponse {
   incomingFriendRequestId: string | null;
 }
 
+export interface PublicProfileActivity {
+  posts: CommunityPostSummary[];
+  questions: QuestionItem[];
+  videos: MyVideoItem[];
+}
+
 export interface CommunityMailboxNotification {
   id: string;
   type: 'friend-request' | 'notice';

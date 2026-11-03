@@ -9,6 +9,7 @@ import type {
   MyAnswerItem,
   MyCommunityPostItem,
   MyVideoItem,
+  PublicProfileActivity,
   HomeFeedResponse,
   VideoItem,
   VideoCommentItem,
@@ -39,6 +40,18 @@ function inferAzureBackendUrlFromFrontendHost(hostname: string): string | null {
 
 function apiBaseUrl() {
   const publicApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    typeof window !== 'undefined' &&
+    /^account-[1-9]\d*\.localhost$/.test(window.location.hostname)
+  ) {
+    const localBackend = new URL(publicApiUrl ?? DEFAULT_API_BASE_URL);
+    if (['localhost', '127.0.0.1', '[::1]'].includes(localBackend.hostname)) {
+      localBackend.hostname = window.location.hostname;
+      return localBackend.toString().replace(/\/$/, '');
+    }
+  }
+
   if (publicApiUrl) {
     return publicApiUrl;
   }
@@ -540,6 +553,32 @@ export async function getCommunityProfile(profileId: string, currentUserId: stri
   return fetchJson<CommunityProfileDetailResponse>(
     `/community/profiles/${encodeURIComponent(profileId)}?currentUserId=${encodeURIComponent(currentUserId)}`,
   );
+}
+
+export async function getPublicProfileActivity(profileId: string, viewerId: string): Promise<PublicProfileActivity> {
+  const [board, questions, videos] = await Promise.all([
+    getCommunityBoard(viewerId),
+    getQuestionsAll(),
+    getMyVideos(profileId),
+  ]);
+  const posts = [...board.posts];
+  for (let page = 2; page <= board.totalPages; page += 1) {
+    const nextPage = await getCommunityBoard(viewerId, page);
+    posts.push(...nextPage.posts);
+  }
+
+  const newestFirst = (left: { createdAt: string }, right: { createdAt: string }) =>
+    new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+
+  return {
+    posts: posts
+      .filter((post) => post.authorId === profileId && post.authorVisibility === 'nickname')
+      .sort(newestFirst),
+    questions: questions
+      .filter((question) => question.authorId === profileId && question.visibility === 'nickname')
+      .sort(newestFirst),
+    videos: [...videos].sort(newestFirst),
+  };
 }
 
 export async function getCommunityMailbox(userId: string) {

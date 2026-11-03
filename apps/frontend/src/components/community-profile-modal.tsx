@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getCommunityProfile, requestFriend } from '../lib/api';
 import type { CommunityProfileDetailResponse } from '../lib/types';
+import { PublicProfileActivity } from './public-profile-activity';
 
 interface CommunityProfileModalProps {
   userId: string;
@@ -39,6 +40,7 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
     const load = async () => {
       setLoading(true);
       setError('');
+      setDetail(null);
       try {
         const result = await getCommunityProfile(userId, effectiveViewerId);
         if (!mounted) return;
@@ -58,7 +60,7 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
     };
   }, [open, userId, effectiveViewerId]);
 
-  const resolvedProfile = detail?.profile;
+  const resolvedProfile = detail?.profile.id === userId ? detail.profile : undefined;
   const relationship = resolvedProfile?.relationship ?? 'none';
   const canRequestFriend = Boolean(
     effectiveViewerId &&
@@ -98,8 +100,7 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
                   </span>
                   <div className="profile-identity-info">
                     <h3>{resolvedProfile.name}</h3>
-                    <p className="card-meta">{resolvedProfile.school} · {resolvedProfile.grade}</p>
-                    <p className="card-meta">{resolvedProfile.bio}</p>
+                    <p className="card-meta">{resolvedProfile.name} 님의 프로필입니다.</p>
                   </div>
                 </div>
 
@@ -137,6 +138,11 @@ export function CommunityProfileModal({ userId, viewerId, displayName, avatar, p
                 {resolvedProfile.lastMessagePreview ? (
                   <p className="card-meta">최근 대화: {resolvedProfile.lastMessagePreview}</p>
                 ) : null}
+                <PublicProfileActivity
+                  key={`${userId}:${effectiveViewerId}`}
+                  profileId={userId}
+                  viewerId={effectiveViewerId}
+                />
               </>
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>

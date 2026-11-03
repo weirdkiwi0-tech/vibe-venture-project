@@ -61,7 +61,7 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   }, [authResolved, currentUserId, page, query]);
 
   return (
-    <div className="community-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '1.5rem', alignItems: 'start' }}>
+    <div className="community-layout">
 
       {/* ───── 왼쪽: 게시글 목록 ───── */}
       <section className="section-card community-main">
@@ -78,15 +78,15 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
         </div>
 
         {/* 검색창 */}
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <form onSubmit={handleSearch} className="inline-search-form">
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="게시글 제목이나 관련 텍스트 입력"
-            style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc' }}
+            className="search-input"
           />
-          <button type="submit" className="primary-button" style={{ padding: '0.5rem 1rem' }}>
+          <button type="submit" className="primary-button">
             검색
           </button>
         </form>

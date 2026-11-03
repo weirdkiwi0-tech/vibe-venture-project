@@ -55,6 +55,8 @@ describe('home top policy e2e', () => {
 
     render(await HomePage());
 
+    expect(screen.getByRole('link', { name: '모든 영상 보기' })).toHaveAttribute('href', '/videos');
+    expect(screen.getByRole('link', { name: '모든 질문 보기' })).toHaveAttribute('href', '/questions');
     expect(screen.getAllByText('인기 질문')).toHaveLength(7);
     expect(screen.getAllByText('도움 필요 질문')).toHaveLength(3);
   });

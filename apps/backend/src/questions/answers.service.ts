@@ -260,12 +260,14 @@ export class AnswersService {
   }
 
   private isVideoAttachment(attachment: string): boolean {
-    return attachment.trim().toLowerCase().startsWith('data:video/');
+    return attachment.trim().toLowerCase().startsWith('data:video/') ||
+      /^(https?:\/\/[^\s]+)?\/uploads\/[\da-f-]+\.(mp4|mov|webm)$/i.test(attachment.trim());
   }
 
   private isCommentMediaAttachment(attachment: string): boolean {
     const normalized = attachment.trim().toLowerCase();
-    return normalized.startsWith('data:image/') || normalized.startsWith('data:video/');
+    return normalized.startsWith('data:image/') || normalized.startsWith('data:video/') ||
+      /^(https?:\/\/[^\s]+)?\/uploads\/[\da-f-]+\.(jpg|png|webp|gif|mp4|mov|webm)$/i.test(normalized);
   }
 
   private sortByCreatedAtThenId(answers: AnswerEntity[]): AnswerEntity[] {

@@ -1,22 +1,14 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SiteShell } from '../../../components/site-shell';
 import { SectionCard } from '../../../components/section-card';
 import { useAuthUser } from '../../../components/role-provider';
 import { createVideo } from '../../../lib/api';
+import { uploadFile, validateUpload } from '../../../lib/uploads';
 
 const MAX_VIDEO_FILE_SIZE_BYTES = 30 * 1024 * 1024;
-
-async function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(reader.error ?? new Error('영상 파일을 읽지 못했습니다.'));
-    reader.readAsDataURL(file);
-  });
-}
 
 async function getVideoDurationSeconds(file: File): Promise<number> {
   const objectUrl = URL.createObjectURL(file);
@@ -24,14 +16,21 @@ async function getVideoDurationSeconds(file: File): Promise<number> {
   try {
     const duration = await new Promise<number>((resolve, reject) => {
       const video = document.createElement('video');
+      const timer = window.setTimeout(() => reject(new Error('영상 정보를 읽지 못했습니다. 다른 영상 파일로 다시 시도해주세요.')), 15000);
       video.preload = 'metadata';
       video.src = objectUrl;
 
       video.onloadedmetadata = () => {
-        resolve(video.duration || 0);
+        window.clearTimeout(timer);
+        if (!Number.isFinite(video.duration) || video.duration <= 0) {
+          reject(new Error('영상 길이를 확인하지 못했습니다.'));
+          return;
+        }
+        resolve(video.duration);
       };
 
       video.onerror = () => {
+        window.clearTimeout(timer);
         reject(new Error('영상 길이를 확인하지 못했습니다.'));
       };
     });
@@ -61,8 +60,25 @@ export default function NewVideoPage() {
   const [duration, setDuration] = useState(0);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
   const handleSelectVideo = (file: File | null) => {
+    if (file) {
+      try {
+        validateUpload(file);
+        if (!file.type.startsWith('video/')) throw new Error('동영상 파일을 선택해주세요.');
+      } catch (error) {
+        setState('error');
+        setMessage(error instanceof Error ? error.message : '영상 파일을 확인해주세요.');
+        setVideoFile(null);
+        setPreviewUrl('');
+        return;
+      }
+    }
     setVideoFile(file);
     setPreviewUrl(file ? URL.createObjectURL(file) : '');
     setDuration(0);
@@ -78,6 +94,7 @@ export default function NewVideoPage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (state === 'loading') return;
     if (!authUser) {
       setState('error');
       setMessage('영상 업로드는 로그인 후 사용할 수 있습니다.');
@@ -103,11 +120,13 @@ export default function NewVideoPage() {
     }
 
     setState('loading');
+    setUploadProgress(0);
     setMessage('영상을 업로드하는 중입니다...');
 
     try {
-      const resolvedDuration = duration > 0 ? duration : await getVideoDurationSeconds(videoFile);
-      const url = await fileToDataUrl(videoFile);
+      const resolvedDuration = Number.isFinite(duration) && duration > 0 ? duration : await getVideoDurationSeconds(videoFile);
+      const url = await uploadFile(videoFile, setUploadProgress);
+      setMessage('업로드가 완료되었습니다. 영상을 등록하는 중입니다...');
       const created = await createVideo({
         title: title.trim(),
         subject,
@@ -161,6 +180,7 @@ export default function NewVideoPage() {
               id={inputId}
               className="file-input-hidden"
               type="file"
+              disabled={state === 'loading'}
               accept="video/*"
               capture="environment"
               onChange={(event) => handleSelectVideo(event.target.files?.[0] ?? null)}
@@ -186,6 +206,8 @@ export default function NewVideoPage() {
           <button type="submit" className="primary-button" disabled={!authUser || state === 'loading'}>
             {state === 'loading' ? '업로드 중...' : '영상 업로드'}
           </button>
+
+          {state === 'loading' && uploadProgress !== null ? <progress aria-label="파일 업로드 진행률" value={uploadProgress} max={100} /> : null}
 
           {message ? <p className={`form-message ${state === 'error' ? 'error' : 'idle'}`}>{message}</p> : null}
         </form>

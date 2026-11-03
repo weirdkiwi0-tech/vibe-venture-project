@@ -154,5 +154,26 @@ describe('Auth API (e2e)', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('keeps local account cookies host-only and logout on the same account origin', async () => {
+      const email = `isolated-${randomUUID()}@test.com`;
+      const signup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .set('Host', 'account-2.localhost:3001')
+        .send({ email, password: 'Secure@99', displayName: 'Local account' });
+      expect(signup.status).toBe(201);
+      const rawCookies = signup.headers['set-cookie'];
+      const cookies = Array.isArray(rawCookies) ? rawCookies : [];
+      const sessionCookie = cookies.find((cookie) => cookie.startsWith('keepit-session='));
+      expect(sessionCookie).toContain('HttpOnly');
+      expect(sessionCookie).not.toMatch(/domain=/i);
+
+      const logout = await request(app.getHttpServer())
+        .get('/auth/logout')
+        .set('Host', 'account-2.localhost:3001')
+        .set('Cookie', cookies.map((cookie) => cookie.split(';')[0]));
+      expect(logout.status).toBe(302);
+      expect(new URL(logout.headers.location).origin).toBe('http://account-2.localhost:3000');
+    });
   });
 });

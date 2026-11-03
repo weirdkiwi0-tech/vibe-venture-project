@@ -6,7 +6,7 @@ import { useId, useState } from 'react';
 
 type ResultState = { status: 'idle' | 'loading' | 'success' | 'error'; message: string };
 
-export function QuestionForm({ onSubmit }: { onSubmit: (formData: FormData) => Promise<void> }) {
+export function QuestionForm({ onSubmit, uploadProgress }: { onSubmit: (formData: FormData) => Promise<void>; uploadProgress?: number | null }) {
   const [result, setResult] = useState<ResultState>({ status: 'idle', message: '' });
   const [attachmentLabel, setAttachmentLabel] = useState('선택된 파일 없음');
   const [subjectSelection, setSubjectSelection] = useState('수학');
@@ -18,7 +18,10 @@ export function QuestionForm({ onSubmit }: { onSubmit: (formData: FormData) => P
   return (
     <form
       className="form-grid"
-      action={async (formData) => {
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (isLoading) return;
+        const formData = new FormData(event.currentTarget);
         if (!resolvedSubject) {
           setResult({ status: 'error', message: '기타를 선택한 경우 과목명을 입력해주세요.' });
           return;
@@ -28,8 +31,8 @@ export function QuestionForm({ onSubmit }: { onSubmit: (formData: FormData) => P
         try {
           await onSubmit(formData);
           setResult({ status: 'success', message: '질문이 등록되었습니다.' });
-        } catch {
-          setResult({ status: 'error', message: '등록에 실패했습니다.' });
+        } catch (error) {
+          setResult({ status: 'error', message: error instanceof Error ? error.message : '등록에 실패했습니다.' });
         }
       }}
     >
@@ -108,6 +111,7 @@ export function QuestionForm({ onSubmit }: { onSubmit: (formData: FormData) => P
           className="file-input-hidden"
           name="attachments"
           type="file"
+          disabled={isLoading}
           accept="image/*"
           multiple
           capture="environment"
@@ -126,6 +130,7 @@ export function QuestionForm({ onSubmit }: { onSubmit: (formData: FormData) => P
       <button type="submit" className="primary-button" disabled={isLoading}>
         {isLoading ? '등록 중...' : '질문 등록'}
       </button>
+      {isLoading && uploadProgress != null ? <progress aria-label="파일 업로드 진행률" value={uploadProgress} max={100} /> : null}
       {result.message ? <p className={`form-message ${result.status}`}>{result.message}</p> : null}
     </form>
   );

@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { json, urlencoded, type Request, type Response, type NextFunction } from 'express';
 import { AppModule } from './app.module';
+import { isLocalAccountOrigin } from './local-account-origin';
 
 const REQUEST_BODY_LIMIT = '50mb';
 
@@ -32,7 +33,9 @@ async function bootstrap() {
       return true;
     }
 
-    return staticAllowedOrigins.has(origin) || isLikelyContainerAppOrigin(origin);
+    return staticAllowedOrigins.has(origin) ||
+      isLikelyContainerAppOrigin(origin) ||
+      isLocalAccountOrigin(origin, configuredFrontend);
   };
 
   // Base64 첨부파일이 포함된 요청(질문/답변/영상 등록) 수용을 위해 body parser 한도를 상향합니다.

@@ -4,17 +4,9 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createAnswer } from '../lib/api';
 import { useAuthUser } from './role-provider';
+import { uploadFiles } from '../lib/uploads';
 
 type State = { status: 'idle' | 'loading' | 'success' | 'error'; message: string };
-
-async function toAttachmentValue(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(reader.error ?? new Error('파일을 읽지 못했습니다.'));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function AnswerForm({ questionId }: { questionId: string }) {
   const router = useRouter();
@@ -22,12 +14,18 @@ export function AnswerForm({ questionId }: { questionId: string }) {
   const [state, setState] = useState<State>({ status: 'idle', message: '' });
   const [answerType, setAnswerType] = useState<'text' | 'video'>('text');
   const [attachmentLabel, setAttachmentLabel] = useState('선택된 파일 없음');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const attachmentInputId = useId();
 
   return (
     <form
       className="form-grid"
-      action={async (formData) => {
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (state.status === 'loading') return;
+        const formData = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        setUploadProgress(null);
         setState({ status: 'loading', message: '답변을 등록하는 중입니다.' });
         if (!authUser) {
           setState({ status: 'error', message: '답변을 작성하려면 로그인해주세요.' });
@@ -39,14 +37,13 @@ export function AnswerForm({ questionId }: { questionId: string }) {
           const files = formData
             .getAll('attachments')
             .filter((entry): entry is File => entry instanceof File)
-            .filter((file) => file.size > 0)
-            .slice(0, 4);
+            .filter((file) => file.size > 0);
 
           if (selectedType === 'video' && files.some((file) => !file.type.startsWith('video/'))) {
             throw new Error('풀이 영상 첨부는 동영상 파일만 업로드할 수 있습니다.');
           }
 
-          const attachments = await Promise.all(files.map((file) => toAttachmentValue(file)));
+          const attachments = await uploadFiles(files, setUploadProgress);
 
           await createAnswer({
             questionId,
@@ -55,6 +52,8 @@ export function AnswerForm({ questionId }: { questionId: string }) {
             attachments,
             userId: authUser.id,
           });
+          form.reset();
+          setAttachmentLabel('선택된 파일 없음');
           setState({ status: 'success', message: '답변이 등록되었습니다.' });
           router.refresh();
         } catch (error) {
@@ -92,6 +91,7 @@ export function AnswerForm({ questionId }: { questionId: string }) {
           className="file-input-hidden"
           name="attachments"
           type="file"
+          disabled={state.status === 'loading'}
           accept={answerType === 'video' ? 'video/*' : 'image/*,video/*,application/pdf'}
           multiple
           onChange={(event) => {
@@ -119,8 +119,9 @@ export function AnswerForm({ questionId }: { questionId: string }) {
         </div>
       </label>
       <button type="submit" className="primary-button" disabled={!authResolved || !authUser || state.status === 'loading'}>
-        답변 등록
+        {state.status === 'loading' ? '등록 중...' : '답변 등록'}
       </button>
+      {state.status === 'loading' && uploadProgress != null ? <progress aria-label="파일 업로드 진행률" value={uploadProgress} max={100} /> : null}
       {!authUser && authResolved ? <p className="form-message error">답변 작성은 로그인 후 사용할 수 있습니다.</p> : null}
       {state.message ? <p className={`form-message ${state.status}`}>{state.message}</p> : null}
     </form>

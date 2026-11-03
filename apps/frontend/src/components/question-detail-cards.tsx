@@ -9,15 +9,7 @@ import type { QuestionAnswerCommentItem, QuestionAnswerItem, QuestionItem } from
 import { useAuthUser } from './role-provider';
 import { CommunityProfileModal } from './community-profile-modal';
 import { AnonymousProfileBadge } from './anonymous-profile-badge';
-
-async function toAttachmentValue(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(reader.error ?? new Error('파일을 읽지 못했습니다.'));
-    reader.readAsDataURL(file);
-  });
-}
+import { attachmentKind, uploadFiles } from '../lib/uploads';
 
 export function QuestionDetailCard({ question }: { question: QuestionItem }) {
   const router = useRouter();
@@ -139,6 +131,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
   const [likedByAnswer, setLikedByAnswer] = useState<Record<string, boolean>>({});
   const [likeLoadingByComment, setLikeLoadingByComment] = useState<Record<string, boolean>>({});
   const [likedByComment, setLikedByComment] = useState<Record<string, boolean>>({});
+  const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -228,6 +221,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     }
 
     const key = parentCommentId ?? answerId;
+    if (commentSubmitting[key]) return;
     const content = (parentCommentId ? replyDraftByComment[parentCommentId] : commentDraftByAnswer[answerId])?.trim() ?? '';
     const selectedFiles = (parentCommentId ? replyFilesByComment[parentCommentId] : commentFilesByAnswer[answerId]) ?? [];
     const authorVisibility = parentCommentId
@@ -237,8 +231,9 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
       return;
     }
 
+    setCommentSubmitting((previous) => ({ ...previous, [key]: true }));
     try {
-      const attachments = await Promise.all(selectedFiles.slice(0, 4).map((file) => toAttachmentValue(file)));
+      const attachments = await uploadFiles(selectedFiles);
       const comment = await createAnswerComment({
         answerId,
         content,
@@ -264,6 +259,8 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     } catch (error) {
       const message = error instanceof Error ? error.message : '댓글 등록에 실패했습니다.';
       window.alert(message);
+    } finally {
+      setCommentSubmitting((previous) => ({ ...previous, [key]: false }));
     }
   };
 
@@ -330,10 +327,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
             <div className="attachment-grid" style={{ marginTop: '0.45rem' }}>
               {(comment.attachments ?? []).map((attachment, index) => {
                 const key = `${comment.id}-attachment-${index}`;
-                if (attachment.startsWith('data:video')) {
+                if (attachmentKind(attachment) === 'video') {
                   return <video key={key} src={attachment} controls className="answer-attachment-video" />;
                 }
-                if (attachment.startsWith('data:image')) {
+                if (attachmentKind(attachment) === 'image') {
                   return <img key={key} src={attachment} alt={`댓글 첨부 ${index + 1}`} className="question-attachment" />;
                 }
 
@@ -418,8 +415,8 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '0.35rem' }}>
-                <button type="button" className="primary-button" onClick={() => void handleCreateComment(answerId, comment.id)}>
-                  답글 등록
+                <button type="button" className="primary-button" disabled={commentSubmitting[comment.id]} onClick={() => void handleCreateComment(answerId, comment.id)}>
+                  {commentSubmitting[comment.id] ? '등록 중...' : '답글 등록'}
                 </button>
                 <button
                   type="button"
@@ -463,10 +460,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
             <div className="attachment-grid">
               {(answer.attachments ?? []).map((attachment, index) => {
                 const key = `${answer.id}-attachment-${index}`;
-                if (attachment.startsWith('data:video')) {
+                if (attachmentKind(attachment) === 'video') {
                   return <video key={key} src={attachment} controls className="answer-attachment-video" />;
                 }
-                if (attachment.startsWith('data:image')) {
+                if (attachmentKind(attachment) === 'image') {
                   return <img key={key} src={attachment} alt={`답변 첨부 ${index + 1}`} className="question-attachment" />;
                 }
 
@@ -560,8 +557,8 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
                 </span>
               </div>
               <div>
-                <button type="button" className="primary-button" onClick={() => void handleCreateComment(answer.id)}>
-                  답글 등록
+                <button type="button" className="primary-button" disabled={commentSubmitting[answer.id]} onClick={() => void handleCreateComment(answer.id)}>
+                  {commentSubmitting[answer.id] ? '등록 중...' : '답글 등록'}
                 </button>
               </div>
             </div>
