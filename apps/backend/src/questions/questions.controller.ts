@@ -63,12 +63,13 @@ export class QuestionsController {
     };
   }
 
-  private async mapQuestionItemWithAuthor({ question, answerCount }: QuestionWithAnswerCount) {
+  private async mapQuestionItemWithAuthor({ question, answerCount }: QuestionWithAnswerCount, viewerId?: string) {
     const isAnonymous = question.visibility === 'anonymous';
     const authorDisplay = isAnonymous ? null : await this.resolvePersonDisplay(question.authorId);
     return {
       id: question.id,
-      authorId: question.authorId,
+      authorId: isAnonymous ? 'anonymous' : question.authorId,
+      isOwner: question.authorId === viewerId,
       authorName: isAnonymous ? '익명' : (authorDisplay?.name ?? '알 수 없음'),
       authorAvatar: isAnonymous ? '익' : (authorDisplay?.avatar ?? 'U'),
       authorPhotoUrl: isAnonymous ? undefined : authorDisplay?.photoUrl,
@@ -149,7 +150,7 @@ export class QuestionsController {
       grade: query.grade,
       title: query.title,
     }, viewerId);
-    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item, viewerId)));
   }
 
   @Get('all')
@@ -164,13 +165,13 @@ export class QuestionsController {
       grade: query.grade,
       title: query.title,
     }, viewerId);
-    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item, viewerId)));
   }
 
   @Get('mine')
   async listMyQuestions(@Headers('x-user-id') authorId?: string) {
     const items = await this.questionsService.listByAuthorId(authorId ?? 'anonymous-user');
-    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item)));
+    return Promise.all(items.map((item) => this.mapQuestionItemWithAuthor(item, authorId)));
   }
 
   @Get('mine/answers')
@@ -204,7 +205,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader: string | undefined,
   ) {
     const viewerId = await this.resolveViewerId(req, userIdHeader);
-    return this.mapQuestionItemWithAuthor(await this.questionsService.findById(id, viewerId));
+    return this.mapQuestionItemWithAuthor(await this.questionsService.findById(id, viewerId), viewerId);
   }
 
   @Patch(':id/solve')
@@ -214,7 +215,7 @@ export class QuestionsController {
     @Headers('x-user-id') userIdHeader?: string,
   ) {
     const requestUserId = (await this.resolveViewerId(req, userIdHeader)) ?? 'anonymous-user';
-    return this.mapQuestionItemWithAuthor(await this.questionsService.solve(id, requestUserId));
+    return this.mapQuestionItemWithAuthor(await this.questionsService.solve(id, requestUserId), requestUserId);
   }
 
   @Post(':id/like')

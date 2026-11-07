@@ -6,6 +6,18 @@ const SUPPORTED_TYPES = new Set([
 ]);
 const uploadedFiles = new WeakMap<File, string>();
 
+export function videoSource(value: string, member: boolean): string {
+  if (member) return value;
+  try {
+    const url = new URL(value, 'http://keepit.local');
+    if (!/^\/uploads\/[\da-f-]{36}\.(mp4|mov|webm)$/.test(url.pathname)) return value;
+    url.pathname += '/preview';
+    return value.startsWith('/') ? `${url.pathname}${url.search}` : url.toString();
+  } catch {
+    return value;
+  }
+}
+
 export function validateUpload(file: File) {
   if (!file.size) throw new Error('빈 파일은 업로드할 수 없습니다.');
   if (!SUPPORTED_TYPES.has(file.type)) {

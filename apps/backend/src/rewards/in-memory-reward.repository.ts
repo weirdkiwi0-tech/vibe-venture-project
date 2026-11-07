@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { attachLocalState } from '../db/local-state';
 import { RewardPointEntity } from './entities/reward-point.entity';
 import { RewardRepository } from './rewards.repository';
 
 @Injectable()
 export class InMemoryRewardRepository implements RewardRepository {
   private readonly store = new Map<string, RewardPointEntity>();
+
+  constructor() {
+    attachLocalState(this, 'rewards', ['store'], ['save'], { store: RewardPointEntity.prototype });
+  }
 
   async save(entry: RewardPointEntity): Promise<void> {
     this.store.set(entry.id, entry);

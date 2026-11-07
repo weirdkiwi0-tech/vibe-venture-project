@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
-import { createSignedUpUser } from '../support/e2e-helpers';
+import { createSignedUpUser, sessionCookie } from '../support/e2e-helpers';
 import { TEST_PASSWORD } from '../support/test-constants';
 
 describe('Community API (e2e)', () => {
@@ -25,7 +25,7 @@ describe('Community API (e2e)', () => {
   const createFriendRequest = async (requesterId: string, targetId: string) => {
     const response = await request(app.getHttpServer())
       .post('/community/friend-requests')
-      .set('x-user-id', requesterId)
+      .set('Cookie', await sessionCookie(app, requesterId))
       .send({ targetId });
 
     expect(response.status).toBe(201);
@@ -36,7 +36,7 @@ describe('Community API (e2e)', () => {
   const acceptFriendRequest = async (requestId: string, receiverId: string) => {
     const response = await request(app.getHttpServer())
       .post(`/community/friend-requests/${encodeURIComponent(requestId)}/accept`)
-      .set('x-user-id', receiverId)
+      .set('Cookie', await sessionCookie(app, receiverId))
       .send({});
 
     expect(response.status).toBe(201);
@@ -47,7 +47,7 @@ describe('Community API (e2e)', () => {
   const rejectFriendRequest = async (requestId: string, receiverId: string) => {
     const response = await request(app.getHttpServer())
       .post(`/community/friend-requests/${encodeURIComponent(requestId)}/reject`)
-      .set('x-user-id', receiverId)
+      .set('Cookie', await sessionCookie(app, receiverId))
       .send({});
 
     expect(response.status).toBe(201);
@@ -85,7 +85,7 @@ describe('Community API (e2e)', () => {
 
     const profileBeforeAccept = await request(app.getHttpServer())
       .get(`/community/profiles/${encodeURIComponent(target.id)}?currentUserId=${encodeURIComponent(requester.id)}`)
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
 
     expect(profileBeforeAccept.status).toBe(200);
     expect(profileBeforeAccept.body.profile.relationship).toBe('pending-incoming');
@@ -96,11 +96,11 @@ describe('Community API (e2e)', () => {
 
     const mailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', target.id);
+      .set('Cookie', await sessionCookie(app, target.id));
 
     const requesterMailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
 
     expect(mailbox.status).toBe(200);
     expect(requesterMailbox.status).toBe(200);
@@ -112,7 +112,7 @@ describe('Community API (e2e)', () => {
 
     const board = await request(app.getHttpServer())
       .get('/community')
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
 
     expect(board.status).toBe(200);
     expect(Array.isArray(board.body.friends)).toBe(true);
@@ -120,17 +120,17 @@ describe('Community API (e2e)', () => {
 
     const targetBoard = await request(app.getHttpServer())
       .get('/community')
-      .set('x-user-id', target.id);
+      .set('Cookie', await sessionCookie(app, target.id));
 
     expect(targetBoard.status).toBe(200);
     expect(targetBoard.body.friends.some((friend: { id: string }) => friend.id === requester.id)).toBe(true);
 
     const requesterProfileAfterAccept = await request(app.getHttpServer())
       .get(`/community/profiles/${encodeURIComponent(target.id)}?currentUserId=${encodeURIComponent(requester.id)}`)
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
     const targetProfileAfterAccept = await request(app.getHttpServer())
       .get(`/community/profiles/${encodeURIComponent(requester.id)}?currentUserId=${encodeURIComponent(target.id)}`)
-      .set('x-user-id', target.id);
+      .set('Cookie', await sessionCookie(app, target.id));
 
     expect(requesterProfileAfterAccept.status).toBe(200);
     expect(targetProfileAfterAccept.status).toBe(200);
@@ -149,10 +149,10 @@ describe('Community API (e2e)', () => {
 
     const requesterMailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
     const targetMailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', target.id);
+      .set('Cookie', await sessionCookie(app, target.id));
 
     expect(requesterMailbox.status).toBe(200);
     expect(targetMailbox.status).toBe(200);
@@ -173,7 +173,7 @@ describe('Community API (e2e)', () => {
 
     const rejectAfterAccept = await request(app.getHttpServer())
       .post(`/community/friend-requests/${encodeURIComponent(acceptedRequest.body.id as string)}/reject`)
-      .set('x-user-id', acceptTarget.id)
+      .set('Cookie', await sessionCookie(app, acceptTarget.id))
       .send({});
 
     expect(rejectAfterAccept.status).toBe(400);
@@ -186,7 +186,7 @@ describe('Community API (e2e)', () => {
 
     const acceptAfterReject = await request(app.getHttpServer())
       .post(`/community/friend-requests/${encodeURIComponent(rejectedRequest.body.id as string)}/accept`)
-      .set('x-user-id', rejectTarget.id)
+      .set('Cookie', await sessionCookie(app, rejectTarget.id))
       .send({});
 
     expect(acceptAfterReject.status).toBe(400);
@@ -197,7 +197,7 @@ describe('Community API (e2e)', () => {
 
     const post = await request(app.getHttpServer())
       .post('/community/posts')
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({
         title: '익명 댓글 게시글',
         content: '내용',
@@ -207,7 +207,7 @@ describe('Community API (e2e)', () => {
 
     const createdComment = await request(app.getHttpServer())
       .post(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({
         content: '익명 댓글입니다',
         authorVisibility: 'anonymous',
@@ -221,7 +221,7 @@ describe('Community API (e2e)', () => {
 
     const listedComments = await request(app.getHttpServer())
       .get(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
-      .set('x-user-id', user.id);
+      .set('Cookie', await sessionCookie(app, user.id));
 
     expect(listedComments.status).toBe(200);
     expect(Array.isArray(listedComments.body)).toBe(true);
@@ -240,10 +240,10 @@ describe('Community API (e2e)', () => {
 
     const requesterMailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
     const receiverMailbox = await request(app.getHttpServer())
       .get('/community/mailbox')
-      .set('x-user-id', receiver.id);
+      .set('Cookie', await sessionCookie(app, receiver.id));
 
     expect(requesterMailbox.status).toBe(200);
     expect(receiverMailbox.status).toBe(200);
@@ -273,7 +273,7 @@ describe('Community API (e2e)', () => {
 
     const sent = await request(app.getHttpServer())
       .post('/community/messages/direct')
-      .set('x-user-id', requester.id)
+      .set('Cookie', await sessionCookie(app, requester.id))
       .send({
         recipientId: target.id,
         content: 'E2E 다이렉트 메시지',
@@ -285,7 +285,7 @@ describe('Community API (e2e)', () => {
 
     const profile = await request(app.getHttpServer())
       .get(`/community/profiles/${encodeURIComponent(target.id)}?currentUserId=${encodeURIComponent(requester.id)}`)
-      .set('x-user-id', requester.id);
+      .set('Cookie', await sessionCookie(app, requester.id));
 
     expect(profile.status).toBe(200);
     expect(profile.body.canChat).toBe(true);
@@ -319,7 +319,7 @@ describe('Community API (e2e)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: 'CRUD 테스트 게시글', content: '게시글 내용입니다.' });
 
       expect(res.status).toBe(201);
@@ -331,12 +331,12 @@ describe('Community API (e2e)', () => {
 
       await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '보드 확인 게시글', content: '내용' });
 
       const res = await request(app.getHttpServer())
         .get('/community')
-        .set('x-user-id', user.id);
+        .set('Cookie', await sessionCookie(app, user.id));
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.posts)).toBe(true);
@@ -347,7 +347,7 @@ describe('Community API (e2e)', () => {
 
       const created = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '상세 조회 게시글', content: '내용' });
       expect(created.status).toBe(201);
 
@@ -363,13 +363,13 @@ describe('Community API (e2e)', () => {
 
       const post = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '댓글 테스트 게시글', content: '내용' });
       expect(post.status).toBe(201);
 
       const comment = await request(app.getHttpServer())
         .post(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ content: '테스트 댓글', authorVisibility: 'nickname' });
 
       expect(comment.status).toBe(201);
@@ -381,17 +381,17 @@ describe('Community API (e2e)', () => {
 
       const post = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '댓글 목록 게시글', content: '내용' });
 
       await request(app.getHttpServer())
         .post(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ content: '목록 확인 댓글', authorVisibility: 'nickname' });
 
       const comments = await request(app.getHttpServer())
         .get(`/community/posts/${encodeURIComponent(post.body.id)}/comments`)
-        .set('x-user-id', user.id);
+        .set('Cookie', await sessionCookie(app, user.id));
 
       expect(comments.status).toBe(200);
       expect(Array.isArray(comments.body)).toBe(true);
@@ -404,13 +404,13 @@ describe('Community API (e2e)', () => {
 
       const post = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '좋아요 테스트 게시글', content: '내용' });
       expect(post.status).toBe(201);
 
       const liked = await request(app.getHttpServer())
         .post(`/community/posts/${encodeURIComponent(post.body.id)}/like`)
-        .set('x-user-id', liker.id);
+        .set('Cookie', await sessionCookie(app, liker.id));
 
       expect(liked.status).toBe(200);
       expect(liked.body.likeCount).toBeDefined();
@@ -421,7 +421,7 @@ describe('Community API (e2e)', () => {
 
       const post = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '닉네임 게시글', content: '내용', authorVisibility: 'nickname' });
       expect(post.status).toBe(201);
 
@@ -435,7 +435,7 @@ describe('Community API (e2e)', () => {
 
       const post = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', user.id)
+        .set('Cookie', await sessionCookie(app, user.id))
         .send({ title: '익명 게시글', content: '내용', authorVisibility: 'anonymous' });
       expect(post.status).toBe(201);
 
@@ -449,32 +449,32 @@ describe('Community API (e2e)', () => {
 
       const created = await request(app.getHttpServer())
         .post('/community/posts')
-        .set('x-user-id', author.id)
+        .set('Cookie', await sessionCookie(app, author.id))
         .send({ title: '초기 게시글 제목', content: '초기 게시글 본문' });
       expect(created.status).toBe(201);
       const postId = created.body.id as string;
 
       const selfView = await request(app.getHttpServer())
         .get(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', author.id);
+        .set('Cookie', await sessionCookie(app, author.id));
       expect(selfView.status).toBe(200);
       expect(selfView.body.viewCount).toBe(0);
 
       const otherView = await request(app.getHttpServer())
         .get(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', otherUser.id);
+        .set('Cookie', await sessionCookie(app, otherUser.id));
       expect(otherView.status).toBe(200);
       expect(otherView.body.viewCount).toBe(1);
 
       const forbiddenPatch = await request(app.getHttpServer())
         .patch(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', otherUser.id)
+        .set('Cookie', await sessionCookie(app, otherUser.id))
         .send({ title: '무단 수정', content: '무단 본문' });
       expect(forbiddenPatch.status).toBe(403);
 
       const updatedPost = await request(app.getHttpServer())
         .patch(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', author.id)
+        .set('Cookie', await sessionCookie(app, author.id))
         .send({ title: '수정된 게시글 제목', content: '수정된 게시글 본문' });
       expect(updatedPost.status).toBe(200);
       expect(updatedPost.body.title).toBe('수정된 게시글 제목');
@@ -482,7 +482,7 @@ describe('Community API (e2e)', () => {
 
       const createdComment = await request(app.getHttpServer())
         .post(`/community/posts/${encodeURIComponent(postId)}/comments`)
-        .set('x-user-id', author.id)
+        .set('Cookie', await sessionCookie(app, author.id))
         .send({ content: '익명 댓글 초안', authorVisibility: 'anonymous' });
       expect(createdComment.status).toBe(201);
       expect(createdComment.body.authorId).toBe('anonymous');
@@ -491,7 +491,7 @@ describe('Community API (e2e)', () => {
 
       const updatedComment = await request(app.getHttpServer())
         .patch(`/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`)
-        .set('x-user-id', author.id)
+        .set('Cookie', await sessionCookie(app, author.id))
         .send({ content: '익명 댓글 수정본' });
       expect(updatedComment.status).toBe(200);
       expect(updatedComment.body.content).toBe('익명 댓글 수정본');
@@ -499,25 +499,25 @@ describe('Community API (e2e)', () => {
 
       const likedComment = await request(app.getHttpServer())
         .post(`/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`)
-        .set('x-user-id', otherUser.id);
+        .set('Cookie', await sessionCookie(app, otherUser.id));
       expect([200, 201]).toContain(likedComment.status);
       expect(likedComment.body).toEqual({ liked: true, likeCount: 1 });
 
       const myPosts = await request(app.getHttpServer())
         .get('/community/my/posts')
-        .set('x-user-id', author.id);
+        .set('Cookie', await sessionCookie(app, author.id));
       expect(myPosts.status).toBe(200);
       expect(Array.isArray(myPosts.body)).toBe(true);
       expect(myPosts.body.some((item: { id: string }) => item.id === postId)).toBe(true);
 
       const forbiddenDelete = await request(app.getHttpServer())
         .delete(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', otherUser.id);
+        .set('Cookie', await sessionCookie(app, otherUser.id));
       expect(forbiddenDelete.status).toBe(403);
 
       const deleted = await request(app.getHttpServer())
         .delete(`/community/posts/${encodeURIComponent(postId)}`)
-        .set('x-user-id', author.id);
+        .set('Cookie', await sessionCookie(app, author.id));
       expect(deleted.status).toBe(200);
       expect(deleted.body).toEqual({ success: true });
     });

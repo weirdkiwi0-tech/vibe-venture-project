@@ -62,4 +62,15 @@ describe('VideosPage guest click navigation (integration)', () => {
     expect(pushMock).toHaveBeenCalledWith('/videos/v-1');
     expect(pushMock).not.toHaveBeenCalledWith('/profile');
   });
+
+  it('keeps monochrome heart keyboard activation separate from video navigation', async () => {
+    render(<VideosPage />);
+    const heart = await screen.findByRole('button', { name: '영상 좋아요 토글' });
+    expect(heart).toHaveTextContent('\u26612');
+    expect(screen.getByLabelText('조회 10회')).toHaveTextContent('\u{1F441}\uFE0E');
+    fireEvent.keyDown(heart, { key: 'Enter' });
+    fireEvent.click(heart);
+    expect(window.alert).toHaveBeenCalledWith('좋아요는 로그인 후 사용할 수 있습니다.');
+    expect(pushMock).not.toHaveBeenCalled();
+  });
 });

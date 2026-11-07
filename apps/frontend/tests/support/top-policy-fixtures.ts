@@ -1,3 +1,5 @@
+import type { HomeQuestionItem } from '../../src/lib/types';
+
 const DEFAULT_LIKE_COUNTS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0];
 
 type TopPolicyQuestionOverrides = {
@@ -9,7 +11,7 @@ type TopPolicyQuestionOverrides = {
 export function createTopPolicyQuestions(
   length = 10,
   overrides: TopPolicyQuestionOverrides = {},
-) {
+): HomeQuestionItem[] {
   const { titlePrefix = '질문', subject = '수학', grade = '2' } = overrides;
 
   return Array.from({ length }, (_, index) => ({

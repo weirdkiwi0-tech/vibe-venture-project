@@ -32,6 +32,7 @@ import type {
 import { DirectChatModal } from './direct-chat-modal';
 import { FriendProfileWindow } from './friend-profile-window';
 import { prepareProfilePhoto } from '../lib/uploads';
+import { ContentMetric } from './content-metric';
 
 type ProfileTab = 'activity' | 'friends';
 type ActivitySubTab = 'questions' | 'comments' | 'videos' | 'posts' | 'mailbox';
@@ -586,7 +587,11 @@ export function ProfilePanel() {
                           <strong>{item.title}</strong>
                           <span className="community-badge subtle">{item.subject || '일반'}</span>
                         </div>
-                        <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
+                        <p className="card-meta content-metrics">
+                          <ContentMetric kind="view" count={item.viewCount} />
+                          <ContentMetric kind="like" count={item.likeCount} />
+                          <span>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                        </p>
                         <div className="hero-actions">
                           <a className="secondary-button" href={`/videos/${item.id}`}>보기</a>
                           <button type="button" className="secondary-button" onClick={() => void handleDeleteVideo(item.id)}>삭제</button>
@@ -609,7 +614,11 @@ export function ProfilePanel() {
                           <strong>{item.title}</strong>
                           <span className="community-badge subtle">{item.subject} · 고{item.grade}</span>
                         </div>
-                        <p className="card-meta">좋아요 {item.likeCount} · 댓글 {item.answerCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
+                        <p className="card-meta content-metrics">
+                          <ContentMetric kind="like" count={item.likeCount} />
+                          <ContentMetric kind="answer" count={item.answerCount} href={`/questions/${item.id}#answers`} />
+                          <span>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                        </p>
                         <div className="hero-actions">
                           <a className="secondary-button" href={`/questions/${item.id}`}>보기</a>
                           <button type="button" className="secondary-button" onClick={() => void handleDeleteQuestion(item.id)}>삭제</button>
@@ -695,7 +704,11 @@ export function ProfilePanel() {
                             <strong>{item.title}</strong>
                           </a>
                         </div>
-                        <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}</p>
+                        <p className="card-meta content-metrics">
+                          <ContentMetric kind="view" count={item.viewCount} />
+                          <ContentMetric kind="like" count={item.likeCount} />
+                          <span>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                        </p>
                         <div className="hero-actions">
                           <button type="button" className="secondary-button" onClick={() => void handleDeletePost(item.id)}>삭제</button>
                         </div>

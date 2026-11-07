@@ -26,7 +26,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init ffmpeg
 
 # Copy package files
 COPY package.json package-lock.json ./

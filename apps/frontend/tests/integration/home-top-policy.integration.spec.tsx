@@ -3,7 +3,7 @@ import HomePage from '../../src/app/page';
 import { getHomeFeed } from '../../src/lib/api';
 import { createTopPolicyQuestions } from '../support/top-policy-fixtures';
 
-const mockQuestionList = jest.fn(() => <div data-testid="question-list" />);
+const mockQuestionList = jest.fn((_props: unknown) => <div data-testid="question-list" />);
 
 jest.mock('next/headers', () => ({
   headers: async () => ({

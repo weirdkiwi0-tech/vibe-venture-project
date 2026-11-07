@@ -15,6 +15,7 @@ import { useCommunityPreferences } from '../lib/community-preferences';
 import { useAuthUser } from './role-provider';
 import { CommunityProfileModal } from './community-profile-modal';
 import { AnonymousProfileBadge } from './anonymous-profile-badge';
+import { ContentMetric, ContentSymbol } from './content-metric';
 import type { CommunityPostCommentItem, CommunityPostDetail } from '../lib/types';
 
 interface CommunityPostWindowProps {
@@ -26,6 +27,7 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
   const { authUser } = useAuthUser();
   const { preferences } = useCommunityPreferences();
   const [post, setPost] = useState(initialPost);
+  const [liked, setLiked] = useState(false);
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [postTitleDraft, setPostTitleDraft] = useState(initialPost.title);
   const [postContentDraft, setPostContentDraft] = useState(initialPost.content);
@@ -46,6 +48,7 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
 
   useEffect(() => {
     setPost(initialPost);
+    setLiked(false);
     setPostTitleDraft(initialPost.title);
     setPostContentDraft(initialPost.content);
     setIsEditingPost(false);
@@ -313,8 +316,10 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
               onClick={() => void handleLikeComment(comment)}
               disabled={likeLoadingByComment[comment.id]}
               aria-pressed={likedByComment[comment.id] ?? false}
+              aria-label={`댓글 좋아요 ${comment.likeCount}개`}
+              title="좋아요 토글"
             >
-              ♥ {comment.likeCount}
+              <ContentMetric kind="like" count={comment.likeCount} active={likedByComment[comment.id]} />
             </button>
             <button
               type="button"
@@ -339,8 +344,10 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
                 reason: '부적절한 댓글 내용',
               })}
               className="text-link action-report"
+              aria-label="신고하기"
+              title="신고하기"
             >
-              신고하기
+              <ContentSymbol kind="report" />
             </Link>
           </div>
 
@@ -382,6 +389,7 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
     try {
       const result = await likeCommunityPost(post.id);
       setPost((prev) => ({ ...prev, likeCount: result.likeCount }));
+      setLiked(result.liked);
       setMessage('');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '';
@@ -456,8 +464,7 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
         )}
         <div style={{ display: 'flex', gap: '1rem', fontSize: '1rem', color: '#333', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span>날짜 {new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
-          <span>조회수 {post.viewCount}</span>
-          <span>좋아요 {post.likeCount}</span>
+          <ContentMetric kind="view" count={post.viewCount} />
         </div>
       </div>
 
@@ -503,8 +510,15 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
       </section>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-        <button type="button" className="primary-button" onClick={() => void handleLike()}>
-          좋아요 {post.likeCount}
+        <button
+          type="button"
+          className={`heart-like-button ${liked ? 'active' : ''}`}
+          onClick={() => void handleLike()}
+          aria-label={`좋아요 ${post.likeCount}개`}
+          title="좋아요 토글"
+          aria-pressed={liked}
+        >
+          <ContentMetric kind="like" count={post.likeCount} active={liked} />
         </button>
         {isPostOwner && !isEditingPost ? (
           <button type="button" className="secondary-button" onClick={handleStartEditPost}>
@@ -519,8 +533,10 @@ export function CommunityPostWindow({ initialPost, initialComments }: CommunityP
             reason: '부적절한 게시글 내용',
           })}
           className="text-link action-report"
+          aria-label="게시글 신고"
+          title="게시글 신고"
         >
-          게시글 신고
+          <ContentSymbol kind="report" />
         </Link>
         <button
           type="button"

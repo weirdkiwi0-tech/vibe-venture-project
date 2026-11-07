@@ -2,8 +2,11 @@ import { BadRequestException, Injectable, NotFoundException, PayloadTooLargeExce
 import { DefaultAzureCredential } from '@azure/identity';
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import { randomUUID } from 'crypto';
-import { createReadStream } from 'fs';
-import { mkdir, rename, rm, stat, writeFile } from 'fs/promises';
+import { createReadStream, createWriteStream } from 'fs';
+import { mkdir, mkdtemp, rename, rm, stat, writeFile } from 'fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { pipeline } from 'node:stream/promises';
 import { filetypeinfo } from 'magic-bytes.js';
 import { join, resolve } from 'path';
 
@@ -18,10 +21,52 @@ const MEDIA_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
+const execute = promisify(execFile);
+
 @Injectable()
 export class UploadsService {
   private readonly directory = resolve(process.env.UPLOADS_DIR ?? join(process.cwd(), 'data', 'uploads'));
   private container?: ContainerClient;
+  private readonly previews = new Map<string, Promise<string>>();
+
+  async openPreview(name: string) {
+    const original = await this.open(name);
+    if (!original.contentType.startsWith('video/')) throw new NotFoundException('video preview not found');
+    const cacheDirectory = join(this.directory, '.previews');
+    const path = join(cacheDirectory, `${name}.mp4`);
+    try {
+      await stat(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      let pending = this.previews.get(name);
+      if (!pending) {
+        pending = (async () => {
+          await mkdir(cacheDirectory, { recursive: true });
+          const work = await mkdtemp(join(cacheDirectory, 'render-'));
+          try {
+            const source = join(work, `source.${name.split('.').pop()}`);
+            const output = join(work, 'preview.mp4');
+            await pipeline(await original.stream(0, original.size - 1), createWriteStream(source));
+            const probe = await execute(process.env.FFPROBE_PATH ?? 'ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', source], { timeout: 15_000 });
+            const duration = Number(JSON.parse(probe.stdout).format?.duration);
+            if (!Number.isFinite(duration) || duration <= 0) throw new BadRequestException('invalid video duration');
+            await execute(process.env.FFMPEG_PATH ?? 'ffmpeg', ['-v', 'error', '-i', source, '-t', String(duration / 2), '-map', '0:v:0', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-c:a', 'aac', '-movflags', '+faststart', output], { timeout: 120_000 });
+            await rename(output, path);
+            return path;
+          } catch (error) {
+            if (error instanceof BadRequestException) throw error;
+            throw new ServiceUnavailableException('video preview unavailable; FFmpeg and ffprobe are required');
+          } finally {
+            await rm(work, { recursive: true, force: true });
+          }
+        })();
+        this.previews.set(name, pending);
+        void pending.finally(() => this.previews.delete(name)).catch(() => undefined);
+      }
+      await pending;
+    }
+    return { size: (await stat(path)).size, contentType: 'video/mp4', stream: async (start: number, end: number) => createReadStream(path, { start, end }) };
+  }
 
   private getContainer() {
     if (this.container) return this.container;

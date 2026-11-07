@@ -36,6 +36,8 @@ export class ReportsController {
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @RequireRoles('admin')
   async listAll() {
     const reports = await this.reportsService.listAll();
     return reports.map((report) => ({

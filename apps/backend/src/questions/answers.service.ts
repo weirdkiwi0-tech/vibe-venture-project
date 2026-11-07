@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { attachLocalState } from '../db/local-state';
 import { AuthService } from '../auth';
 import { ANSWER_REPOSITORY, AnswerRepository } from './answers.repository';
 import { CreateAnswerDto } from './dto/create-answer.dto';
@@ -52,7 +53,9 @@ export class AnswersService {
     @Inject(QUESTION_REPOSITORY)
     private readonly questionRepository: QuestionRepository,
     @Optional() private readonly authService?: AuthService,
-  ) {}
+  ) {
+    attachLocalState(this, 'answer-interactions', ['likesByAnswerId', 'commentsByAnswerId', 'commentLikesByCommentId'], ['like', 'createComment', 'likeComment', 'deleteById', 'deleteCommentForModeration']);
+  }
 
   async create(questionId: string, input: CreateAnswerDto, authorId = 'anonymous-user') {
     const question = await this.questionRepository.findById(questionId);
@@ -123,6 +126,20 @@ export class AnswersService {
     this.commentsByAnswerId.set(answerId, comments);
     const [node] = await this.buildCommentTree([comment]);
     return node ?? this.toCommentNode(comment, []);
+  }
+
+  async deleteCommentForModeration(commentId: string): Promise<boolean> {
+    for (const [answerId, comments] of this.commentsByAnswerId) {
+      if (!comments.some(comment => comment.id === commentId)) continue;
+      const deleted = new Set([commentId]);
+      for (const comment of comments) {
+        if (comment.parentCommentId && deleted.has(comment.parentCommentId)) deleted.add(comment.id);
+      }
+      this.commentsByAnswerId.set(answerId, comments.filter(comment => !deleted.has(comment.id)));
+      for (const id of deleted) this.commentLikesByCommentId.delete(id);
+      return true;
+    }
+    return false;
   }
 
   async listComments(answerId: string): Promise<AnswerCommentNode[]> {

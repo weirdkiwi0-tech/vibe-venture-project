@@ -186,6 +186,7 @@ export interface CommunityMailboxResponse {
 export interface QuestionItem {
   id: string;
   authorId: string;
+  isOwner?: boolean;
   authorName?: string;
   authorAvatar?: string;
   authorPhotoUrl?: string;

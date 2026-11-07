@@ -7,9 +7,11 @@ import { SectionCard } from '../../../components/section-card';
 import { AnonymousProfileBadge } from '../../../components/anonymous-profile-badge';
 import { CommunityProfileModal } from '../../../components/community-profile-modal';
 import { SiteShell } from '../../../components/site-shell';
+import { ContentMetric, ContentSymbol } from '../../../components/content-metric';
 import { useAuthUser } from '../../../components/role-provider';
 import { useCommunityPreferences } from '../../../lib/community-preferences';
 import { hasReachedGuestPlaybackLimit } from '../../../lib/video-guest-gate';
+import { videoSource } from '../../../lib/uploads';
 import { createReportLink } from '../../../lib/report-links';
 import {
   createVideoComment,
@@ -227,7 +229,9 @@ export default function VideoDetailPage() {
       return;
     }
 
-    if (!hasReachedGuestPlaybackLimit(videoElement.currentTime, videoElement.duration)) {
+    const protectedPreview = video && videoSource(video.url, false) !== video.url;
+    const fullDuration = videoElement.duration * (protectedPreview ? 2 : 1);
+    if (!hasReachedGuestPlaybackLimit(videoElement.currentTime, fullDuration)) {
       return;
     }
 
@@ -251,8 +255,8 @@ export default function VideoDetailPage() {
             </button>
           ) : null}
           {video ? (
-            <Link href={reportHref} className="text-link action-report">
-              이 영상 신고
+            <Link href={reportHref} className="text-link action-report" aria-label="이 영상 신고" title="이 영상 신고">
+              <ContentSymbol kind="report" />
             </Link>
           ) : null}
         </div>
@@ -280,9 +284,10 @@ export default function VideoDetailPage() {
             <div style={{ position: 'relative' }}>
               <video
                 ref={videoElementRef}
-                src={video.url}
+                src={authResolved ? videoSource(video.url, Boolean(authUser)) : undefined}
                 controls
                 onTimeUpdate={handleGuestPreviewTimeUpdate}
+                onEnded={handleGuestPreviewTimeUpdate}
                 style={{ width: '100%', borderRadius: '12px', maxHeight: '72vh' }}
               />
               {!authUser && guestPreviewLimited ? (
@@ -312,15 +317,19 @@ export default function VideoDetailPage() {
               ) : null}
             </div>
             <div className="card-footer" style={{ marginTop: '0.7rem' }}>
-              <span>좋아요 {video.likeCount} · 조회 {video.viewCount}</span>
-              <button
-                type="button"
-                className={`heart-like-button ${liked ? 'active' : ''}`}
-                onClick={() => void handleLike()}
-                aria-label="좋아요 토글"
-              >
-                ♥
-              </button>
+              <div className="content-metrics">
+                <button
+                  type="button"
+                  className={`heart-like-button ${liked ? 'active' : ''}`}
+                  onClick={() => void handleLike()}
+                  aria-label="좋아요 토글"
+                  title="좋아요 토글"
+                  aria-pressed={liked}
+                >
+                  <ContentMetric kind="like" count={video.likeCount} active={liked} />
+                </button>
+                <ContentMetric kind="view" count={video.viewCount} />
+              </div>
             </div>
           </article>
         ) : null}
@@ -376,8 +385,10 @@ export default function VideoDetailPage() {
                   onClick={() => void handleLikeComment(comment.id)}
                   disabled={commentLikeLoading[comment.id]}
                   aria-pressed={likedByComment[comment.id] ?? false}
+                  aria-label={`댓글 좋아요 ${comment.likeCount ?? 0}개`}
+                  title="좋아요 토글"
                 >
-                  ♥ {comment.likeCount ?? 0}
+                  <ContentMetric kind="like" count={comment.likeCount ?? 0} active={likedByComment[comment.id]} />
                 </button>
                 <Link
                   href={createReportLink({
@@ -387,8 +398,10 @@ export default function VideoDetailPage() {
                     reason: '부적절한 댓글 내용',
                   })}
                   className="text-link action-report"
+                  aria-label="신고하기"
+                  title="신고하기"
                 >
-                  신고하기
+                  <ContentSymbol kind="report" />
                 </Link>
               </div>
             </article>

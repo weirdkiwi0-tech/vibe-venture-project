@@ -60,16 +60,17 @@ describe('File uploads API (e2e)', () => {
     expect(downloaded.headers['content-type']).toContain('image/png');
     expect(downloaded.body).toEqual(image);
 
-    const question = await request(app.getHttpServer()).post('/questions').send({
+    const question = await request(app.getHttpServer()).post('/questions').set('Cookie', cookie).send({
       title: 'Uploaded image question', body: 'Question body', subject: 'MATH', grade: '2',
       attachments: [uploaded.body.url],
     });
     expect(question.status).toBe(201);
     const answer = await request(app.getHttpServer()).post(`/questions/${question.body.id}/answers`)
+      .set('Cookie', cookie)
       .send({ type: 'text', content: 'Answer body', attachments: [uploaded.body.url] });
     expect(answer.status).toBe(201);
     const comment = await request(app.getHttpServer()).post(`/questions/answers/${answer.body.id}/comments`)
-      .set('x-user-id', 'upload-e2e-user')
+      .set('Cookie', cookie)
       .send({ content: 'Image comment', attachments: [uploaded.body.url] });
     expect(comment.status).toBe(201);
 
@@ -96,10 +97,15 @@ describe('File uploads API (e2e)', () => {
     expect(uploaded.status).toBe(201);
     expect(uploaded.body.contentType).toBe('video/webm');
     expect(uploaded.body.url).toMatch(/\.webm$/);
-    const question = await request(app.getHttpServer()).post('/questions').send({
+    expect((await request(app.getHttpServer()).get(uploaded.body.url)).status).toBe(401);
+    const original = await request(app.getHttpServer()).get(uploaded.body.url).set('Cookie', cookie);
+    expect(original.status).toBe(200);
+    expect(original.headers['cache-control']).toBe('private, no-store');
+    const question = await request(app.getHttpServer()).post('/questions').set('Cookie', cookie).send({
       title: 'Video question', body: 'Question body', subject: 'MATH', grade: '2',
     });
     const answer = await request(app.getHttpServer()).post(`/questions/${question.body.id}/answers`)
+      .set('Cookie', cookie)
       .send({ type: 'video', content: 'Video explanation', attachments: [uploaded.body.url] });
     expect(answer.status).toBe(201);
   });

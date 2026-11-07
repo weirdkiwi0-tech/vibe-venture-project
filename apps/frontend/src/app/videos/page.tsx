@@ -7,8 +7,10 @@ import { SiteShell } from '../../components/site-shell';
 import { SectionCard } from '../../components/section-card';
 import { deleteVideo, getFilteredVideos, likeVideo } from '../../lib/api';
 import { buildVideoDetailPath } from '../../lib/video-detail-path';
+import { videoSource } from '../../lib/uploads';
 import type { VideoItem } from '../../lib/types';
 import { useAuthUser } from '../../components/role-provider';
+import { ContentMetric } from '../../components/content-metric';
 
 const VIDEO_SUBJECTS = ['전체', '수학', '영어', '국어', '과학', '사회', '기타'] as const;
 const ITEMS_PER_PAGE = 10;
@@ -189,7 +191,7 @@ export default function VideosPage() {
                     style={{ border: video.id === focusId ? '2px solid #2b6ccf' : undefined }}
                     onClick={() => goToDetail(video.id)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
+                      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
                         event.preventDefault();
                         goToDetail(video.id);
                       }
@@ -199,10 +201,25 @@ export default function VideosPage() {
                       {video.subject} · {formatDuration(video.durationSeconds)} · {new Date(video.createdAt).toLocaleDateString('ko-KR')}
                     </div>
                     <h3>{video.title}</h3>
-                    <video src={video.url} style={{ width: '100%', borderRadius: '12px', cursor: 'pointer' }} />
+                    <video src={authResolved ? videoSource(video.url, Boolean(authUser)) : undefined} style={{ width: '100%', borderRadius: '12px', cursor: 'pointer' }} />
                     <div className="card-footer" style={{ marginTop: '0.6rem' }}>
-                      <span>좋아요 {video.likeCount} · 조회 {video.viewCount}</span>
-                      <div>
+                      <div className="content-metrics">
+                        <button
+                          type="button"
+                          className={`heart-like-button ${likedByVideo[video.id] ? 'active' : ''}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleLike(video.id);
+                          }}
+                          aria-label="영상 좋아요 토글"
+                          title="영상 좋아요 토글"
+                          aria-pressed={Boolean(likedByVideo[video.id])}
+                        >
+                          <ContentMetric kind="like" count={video.likeCount} active={likedByVideo[video.id]} />
+                        </button>
+                        <ContentMetric kind="view" count={video.viewCount} />
+                      </div>
+                      <div className="content-actions">
                         {authUser?.role === 'admin' ? (
                           <button
                             type="button"
@@ -216,17 +233,6 @@ export default function VideosPage() {
                             {deletingByVideo[video.id] ? '삭제 중...' : '삭제'}
                           </button>
                         ) : null}
-                        {authUser?.role === 'admin' ? ' · ' : null}
-                        <button
-                          type="button"
-                          className={`heart-like-button ${likedByVideo[video.id] ? 'active' : ''}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleLike(video.id);
-                          }}
-                        >
-                          ♥
-                        </button>
                       </div>
                     </div>
                   </article>

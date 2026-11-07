@@ -9,7 +9,8 @@ import type { QuestionAnswerCommentItem, QuestionAnswerItem, QuestionItem } from
 import { useAuthUser } from './role-provider';
 import { CommunityProfileModal } from './community-profile-modal';
 import { AnonymousProfileBadge } from './anonymous-profile-badge';
-import { attachmentKind, uploadFiles } from '../lib/uploads';
+import { attachmentKind, uploadFiles, videoSource } from '../lib/uploads';
+import { ContentMetric, ContentSymbol } from './content-metric';
 
 export function QuestionDetailCard({ question }: { question: QuestionItem }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function QuestionDetailCard({ question }: { question: QuestionItem }) {
 
   const handleDelete = async () => {
     const requestUserId = authUser?.id;
-    const canDeleteQuestion = Boolean(authUser && (authUser.id === question.authorId || authUser.role === 'admin'));
+    const canDeleteQuestion = Boolean(authUser && (question.isOwner || authUser.id === question.authorId || authUser.role === 'admin'));
     if (!canDeleteQuestion || !requestUserId || !window.confirm('삭제하시겠습니까?')) {
       return;
     }
@@ -53,7 +54,7 @@ export function QuestionDetailCard({ question }: { question: QuestionItem }) {
 
   return (
     <div className="surface-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
         {question.visibility === 'anonymous' ? (
           <AnonymousProfileBadge ariaLabel="익명 질문 작성자" />
         ) : question.authorId && question.authorName ? (
@@ -78,19 +79,22 @@ export function QuestionDetailCard({ question }: { question: QuestionItem }) {
         </div>
       ) : null}
       <div className="card-footer">
-        <span>좋아요 {likeCount} · 조회 {question.viewCount} · 답변 {question.answerCount}개</span>
-        <div>
+        <div className="content-metrics">
           <button
             type="button"
             className={`heart-like-button ${liked ? 'active' : ''}`}
             onClick={() => void handleLike()}
             aria-label="좋아요 토글"
             title="좋아요 토글"
+            aria-pressed={liked}
           >
-            ♥
+            <ContentMetric kind="like" count={likeCount} active={liked} />
           </button>
-          {' · '}
-          {!authUser || authUser.id !== question.authorId ? (
+          <ContentMetric kind="view" count={question.viewCount} />
+          <ContentMetric kind="answer" count={question.answerCount} href="#answers" />
+        </div>
+        <div className="content-actions">
+          {!authUser || (!question.isOwner && authUser.id !== question.authorId) ? (
             <Link
               href={createReportLink({
                 targetType: 'question',
@@ -99,11 +103,13 @@ export function QuestionDetailCard({ question }: { question: QuestionItem }) {
                 reason: '부적절한 질문 내용',
               })}
               className="text-link action-report"
+              aria-label="이 질문 신고"
+              title="이 질문 신고"
             >
-              이 질문 신고
+              <ContentSymbol kind="report" />
             </Link>
           ) : null}
-          {authUser && (authUser.id === question.authorId || authUser.role === 'admin') ? (
+          {authUser && (question.isOwner || authUser.id === question.authorId || authUser.role === 'admin') ? (
             <>
               {' · '}
               <button type="button" className="text-link action-danger" onClick={() => void handleDelete()} disabled={deleting}>
@@ -141,7 +147,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     selected: 'public' | 'anonymous',
     onChange: (next: 'public' | 'anonymous') => void,
   ) => (
-    <div style={{ display: 'inline-flex', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
+    <div className="answer-visibility-toggle" style={{ display: 'inline-flex', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
       <button
         type="button"
         className="secondary-button"
@@ -307,7 +313,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
     return comments.map((comment) => (
       <div key={comment.id} className={depth > 0 ? 'reply-thread-nested' : 'reply-thread-root'}>
         <div className="surface-card reply-thread-card" style={{ padding: '0.6rem 0.8rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center', marginBottom: '0.35rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center', marginBottom: '0.35rem' }}>
             {comment.authorVisibility === 'anonymous' ? (
               <AnonymousProfileBadge compact ariaLabel="익명 댓글 작성자" />
             ) : (
@@ -320,7 +326,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
                 compact
               />
             )}
-            <span className="card-meta" style={{ whiteSpace: 'nowrap' }}>{new Date(comment.createdAt).toLocaleString('ko-KR')}</span>
+            <span className="card-meta">{new Date(comment.createdAt).toLocaleString('ko-KR')}</span>
           </div>
           <p style={{ margin: '0.35rem 0' }}>{comment.content}</p>
           {(comment.attachments ?? []).length > 0 ? (
@@ -328,7 +334,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
               {(comment.attachments ?? []).map((attachment, index) => {
                 const key = `${comment.id}-attachment-${index}`;
                 if (attachmentKind(attachment) === 'video') {
-                  return <video key={key} src={attachment} controls className="answer-attachment-video" />;
+                  return <video key={key} src={videoSource(attachment, Boolean(authUser))} controls className="answer-attachment-video" />;
                 }
                 if (attachmentKind(attachment) === 'image') {
                   return <img key={key} src={attachment} alt={`댓글 첨부 ${index + 1}`} className="question-attachment" />;
@@ -357,8 +363,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
             onClick={() => void handleLikeComment(answerId, comment.id)}
             disabled={likeLoadingByComment[comment.id]}
             aria-pressed={likedByComment[comment.id] ?? false}
+            aria-label={`댓글 좋아요 ${comment.likeCount ?? 0}개`}
+            title="좋아요 토글"
           >
-            ♥ {comment.likeCount ?? 0}
+            <ContentMetric kind="like" count={comment.likeCount ?? 0} active={likedByComment[comment.id]} />
           </button>
           {' · '}
           <Link
@@ -369,8 +377,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
               reason: '부적절한 댓글 또는 답글',
             })}
             className="text-link action-report"
+            aria-label="신고하기"
+            title="신고하기"
           >
-            신고하기
+            <ContentSymbol kind="report" />
           </Link>
 
           {openReplyByComment[comment.id] ? (
@@ -440,10 +450,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
   }
 
   return (
-    <div className="stack-list">
+    <div className="stack-list question-answer-list">
       {answers.map((answer) => (
         <article key={answer.id} id={`answer-${answer.id}`} className="surface-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
             {answer.authorId && answer.authorName ? (
               <CommunityProfileModal
                 userId={answer.authorId}
@@ -461,7 +471,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
               {(answer.attachments ?? []).map((attachment, index) => {
                 const key = `${answer.id}-attachment-${index}`;
                 if (attachmentKind(attachment) === 'video') {
-                  return <video key={key} src={attachment} controls className="answer-attachment-video" />;
+                  return <video key={key} src={videoSource(attachment, Boolean(authUser))} controls className="answer-attachment-video" />;
                 }
                 if (attachmentKind(attachment) === 'image') {
                   return <img key={key} src={attachment} alt={`답변 첨부 ${index + 1}`} className="question-attachment" />;
@@ -487,7 +497,7 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
                 title="답변 하트"
                 aria-pressed={likedByAnswer[answer.id] ?? false}
               >
-                ♥ {answer.likeCount ?? 0}
+                <ContentMetric kind="like" count={answer.likeCount ?? 0} active={likedByAnswer[answer.id]} />
               </button>
               {' · '}
               {!authUser || authUser.id !== answer.authorId ? (
@@ -499,8 +509,10 @@ export function QuestionAnswerList({ initialAnswers }: { initialAnswers: Questio
                     reason: '부적절한 답변 내용',
                   })}
                   className="text-link action-report"
+                  aria-label="신고하기"
+                  title="신고하기"
                 >
-                  신고하기
+                  <ContentSymbol kind="report" />
                 </Link>
               ) : null}
               {authUser && (authUser.id === answer.authorId || authUser.role === 'admin') ? (

@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { deleteQuestion, likeQuestion, likeVideo } from '../lib/api';
 import { createReportLink } from '../lib/report-links';
 import { useAuthUser } from './role-provider';
+import { videoSource } from '../lib/uploads';
+import { ContentMetric, ContentSymbol } from './content-metric';
 
 export function VideoGrid({ videos }: { videos: Array<{ id: string; title: string; subject: string; url: string; durationSeconds: number; likeCount: number; viewCount: number; createdAt: string }> }) {
   const router = useRouter();
@@ -47,7 +49,7 @@ export function VideoGrid({ videos }: { videos: Array<{ id: string; title: strin
           tabIndex={0}
           onClick={() => goToDetail(video.id)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
               event.preventDefault();
               goToDetail(video.id);
             }
@@ -56,13 +58,12 @@ export function VideoGrid({ videos }: { videos: Array<{ id: string; title: strin
           <div className="card-meta">{video.subject} · 영상 · {Math.round(video.durationSeconds / 60)}분</div>
           <h3>{video.title}</h3>
           {canInlinePlay(video.url) ? (
-            <video src={video.url} className="answer-attachment-video" style={{ cursor: 'pointer' }} />
+            <video src={videoSource(video.url, Boolean(authUser))} className="answer-attachment-video" style={{ cursor: 'pointer' }} />
           ) : (
             <p className="card-meta">미리보기는 상세에서 확인할 수 있어요.</p>
           )}
           <div className="card-footer">
-            <span>좋아요 {video.likeCount} · 조회 {video.viewCount} · {new Date(video.createdAt).toLocaleDateString('ko-KR')}</span>
-            <div>
+            <div className="content-metrics">
               <button
                 type="button"
                 className={`heart-like-button ${likedByVideo[video.id] ? 'active' : ''}`}
@@ -72,10 +73,14 @@ export function VideoGrid({ videos }: { videos: Array<{ id: string; title: strin
                 }}
                 aria-label="영상 좋아요 토글"
                 title="영상 좋아요 토글"
+                aria-pressed={Boolean(likedByVideo[video.id])}
               >
-                ♥
+                <ContentMetric kind="like" count={video.likeCount} active={likedByVideo[video.id]} />
               </button>
-              {' · '}
+              <ContentMetric kind="view" count={video.viewCount} />
+            </div>
+            <div className="content-actions">
+              <span>{new Date(video.createdAt).toLocaleDateString('ko-KR')}</span>
               <Link
                 href={createReportLink({
                   targetType: 'video',
@@ -84,9 +89,11 @@ export function VideoGrid({ videos }: { videos: Array<{ id: string; title: strin
                   reason: '부적절한 영상 내용',
                 })}
                 className="text-link action-report"
+                aria-label="신고하기"
+                title="신고하기"
                 onClick={(event) => event.stopPropagation()}
               >
-                신고하기
+                <ContentSymbol kind="report" />
               </Link>
             </div>
           </div>
@@ -99,6 +106,7 @@ export function VideoGrid({ videos }: { videos: Array<{ id: string; title: strin
 type QuestionListItem = {
   id: string;
   authorId?: string;
+  isOwner?: boolean;
   title: string;
   body: string;
   subject: string;
@@ -118,6 +126,7 @@ function QuestionCards({
   onDelete,
   onLike,
   likedState,
+  topPresentation = false,
 }: {
   items: QuestionListItem[];
   startIndex: number;
@@ -126,6 +135,7 @@ function QuestionCards({
   onDelete: (questionId: string) => Promise<void>;
   onLike: (questionId: string) => Promise<void>;
   likedState: Record<string, boolean>;
+  topPresentation?: boolean;
 }) {
   const router = useRouter();
 
@@ -136,22 +146,39 @@ function QuestionCards({
         const policyLabel = totalCount === 10
           ? (absoluteIndex < 7 ? '인기 질문' : '도움 필요 질문')
           : null;
+        const likeButton = (
+          <button
+            type="button"
+            className={`heart-like-button ${likedState[question.id] ? 'active' : ''}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void onLike(question.id);
+            }}
+            aria-label={`좋아요 ${question.likeCount}개`}
+            aria-pressed={Boolean(likedState[question.id])}
+            title="좋아요 토글"
+          >
+            <ContentMetric kind="like" count={question.likeCount} active={likedState[question.id]} />
+          </button>
+        );
 
         return (
         <article
           key={question.id}
-          className="surface-card question-card"
+          className={`surface-card question-card${topPresentation ? ' question-top-card' : ''}`}
           role="button"
           tabIndex={0}
           onClick={() => router.push(`/questions/${question.id}`)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
               event.preventDefault();
               router.push(`/questions/${question.id}`);
             }
           }}
         >
-          <div className="question-index">{String(startIndex + index + 1).padStart(2, '0')}</div>
+          {topPresentation ? (
+            <div className="question-index">{String(startIndex + index + 1).padStart(2, '0')}</div>
+          ) : null}
           <div>
             <div className="card-meta">
               {policyLabel ? <span>{policyLabel}</span> : null}
@@ -165,24 +192,14 @@ function QuestionCards({
             </h3>
             <p>{question.body}</p>
             <div className="card-footer">
-              <span>좋아요 {question.likeCount} · 조회 {question.viewCount} · 답변 {question.answerCount}개</span>
-              <div>
-                <button
-                  type="button"
-                  className={`heart-like-button ${likedState[question.id] ? 'active' : ''}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void onLike(question.id);
-                  }}
-                  aria-label="좋아요 토글"
-                  title="좋아요 토글"
-                >
-                  ♥
-                </button>
-                {' · '}
+              <div className="content-metrics">
+                {likeButton}
+                <ContentMetric kind="view" count={question.viewCount} />
+                <ContentMetric kind="answer" count={question.answerCount} href={`/questions/${question.id}#answers`} />
+              </div>
+              <div className="content-actions">
                 <span>{new Date(question.createdAt).toLocaleDateString('ko-KR')}</span>
-                {' · '}
-                {!authUser || authUser.id !== question.authorId ? (
+                {!authUser || (!question.isOwner && authUser.id !== question.authorId) ? (
                   <Link
                     href={createReportLink({
                       targetType: 'question',
@@ -191,14 +208,15 @@ function QuestionCards({
                       reason: '부적절한 질문 내용',
                     })}
                     className="text-link action-report"
+                    aria-label="신고하기"
+                    title="신고하기"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    신고하기
+                    <ContentSymbol kind="report" />
                   </Link>
                 ) : null}
-                {authUser && 'authorId' in question && (authUser.id === question.authorId || authUser.role === 'admin') ? (
+                {authUser && 'authorId' in question && (question.isOwner || authUser.id === question.authorId || authUser.role === 'admin') ? (
                   <>
-                    {' · '}
                     <button
                       type="button"
                       className="text-link action-danger"
@@ -325,6 +343,7 @@ export function QuestionList({
                   onDelete={handleDelete}
                   onLike={handleLike}
                   likedState={likedState}
+                  topPresentation
                 />
               </div>
             </div>

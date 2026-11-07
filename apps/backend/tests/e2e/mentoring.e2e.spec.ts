@@ -5,13 +5,16 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import request from 'supertest';
+import { createAuthenticatedAgent, sessionCookie } from '../support/e2e-helpers';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
 import { createAdminSession } from '../support/e2e-helpers';
 
 describe('Mentoring API (e2e)', () => {
   let app: INestApplication;
+  let member: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
   let authService: AuthService;
+  let mentorCookie: string;
   let testDbPath = '';
   const originalDbPath = process.env.DB_PATH;
 
@@ -33,8 +36,10 @@ describe('Mentoring API (e2e)', () => {
       }),
     );
     await app.init();
+    member = await createAuthenticatedAgent(app);
 
     authService = moduleRef.get(AuthService);
+    mentorCookie = `keepit-session=${await createAdminSession(authService, { email: 'mentor-fixture@example.com' })}`;
   });
 
   afterAll(async () => {
@@ -47,7 +52,7 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('creates session, sends messages, and fetches details', async () => {
-    const createRes = await request(app.getHttpServer())
+    const createRes = await member
       .post('/mentoring/sessions')
       .send({ question: 'e2e mentoring question' });
 
@@ -55,17 +60,18 @@ describe('Mentoring API (e2e)', () => {
 
     const sessionId = createRes.body.id;
 
-    const learnerMessageRes = await request(app.getHttpServer())
+    const learnerMessageRes = await member
       .post(`/mentoring/sessions/${sessionId}/messages`)
       .send({ sender: 'learner', content: 'hello mentor' });
     expect(learnerMessageRes.status).toBe(201);
 
-    const mentorMessageRes = await request(app.getHttpServer())
+    const mentorMessageRes = await member
       .post(`/mentoring/sessions/${sessionId}/messages`)
+      .set('Cookie', mentorCookie)
       .send({ sender: 'mentor', content: 'hello learner' });
     expect(mentorMessageRes.status).toBe(201);
 
-    const findRes = await request(app.getHttpServer()).get(
+    const findRes = await member.get(
       `/mentoring/sessions/${sessionId}`,
     );
 
@@ -76,7 +82,7 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('returns 404 when sending message to unknown session', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await member
       .post('/mentoring/sessions/unknown/messages')
       .send({ sender: 'mentor', content: 'x' });
 
@@ -84,11 +90,11 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('returns 400 when message violates safety policy', async () => {
-    const created = await request(app.getHttpServer())
+    const created = await member
       .post('/mentoring/sessions')
       .send({ question: 'policy e2e test' });
 
-    const res = await request(app.getHttpServer())
+    const res = await member
       .post(`/mentoring/sessions/${created.body.id}/messages`)
       .send({ sender: 'learner', content: 'my phone is 010-1234-5678' });
 
@@ -96,7 +102,7 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('GET /mentoring/sessions/sla/breaches -> 403 without admin role', async () => {
-    const res = await request(app.getHttpServer()).get('/mentoring/sessions/sla/breaches');
+    const res = await member.get('/mentoring/sessions/sla/breaches');
     expect(res.status).toBe(403);
   });
 
@@ -107,11 +113,11 @@ describe('Mentoring API (e2e)', () => {
       displayName: 'Mentoring Admin',
     });
 
-    const session = await request(app.getHttpServer())
+    const session = await member
       .post('/mentoring/sessions')
       .send({ question: 'sla breach candidate' });
 
-    const res = await request(app.getHttpServer())
+    const res = await member
       .get('/mentoring/sessions/sla/breaches')
       .set('Cookie', [`keepit-session=${adminSession}`]);
 
@@ -121,35 +127,37 @@ describe('Mentoring API (e2e)', () => {
   });
 
   it('keeps firstMentorResponseAt at first mentor message and ignores learner messages', async () => {
-    const createRes = await request(app.getHttpServer())
+    const createRes = await member
       .post('/mentoring/sessions')
       .send({ question: 'first mentor response e2e contract' });
 
     expect(createRes.status).toBe(201);
     const sessionId = createRes.body.id;
 
-    const learnerRes = await request(app.getHttpServer())
+    const learnerRes = await member
       .post(`/mentoring/sessions/${sessionId}/messages`)
       .send({ sender: 'learner', content: 'learner first' });
     expect(learnerRes.status).toBe(201);
 
-    const afterLearnerRes = await request(app.getHttpServer()).get(
+    const afterLearnerRes = await member.get(
       `/mentoring/sessions/${sessionId}`,
     );
     expect(afterLearnerRes.status).toBe(200);
     expect(afterLearnerRes.body.firstMentorResponseAt).toBeNull();
 
-    const firstMentorRes = await request(app.getHttpServer())
+    const firstMentorRes = await member
       .post(`/mentoring/sessions/${sessionId}/messages`)
+      .set('Cookie', mentorCookie)
       .send({ sender: 'mentor', content: 'first mentor' });
     expect(firstMentorRes.status).toBe(201);
 
-    const secondMentorRes = await request(app.getHttpServer())
+    const secondMentorRes = await member
       .post(`/mentoring/sessions/${sessionId}/messages`)
+      .set('Cookie', mentorCookie)
       .send({ sender: 'mentor', content: 'second mentor' });
     expect(secondMentorRes.status).toBe(201);
 
-    const afterMentorRes = await request(app.getHttpServer()).get(
+    const afterMentorRes = await member.get(
       `/mentoring/sessions/${sessionId}`,
     );
 

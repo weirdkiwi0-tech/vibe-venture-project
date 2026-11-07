@@ -9,6 +9,29 @@ import request from 'supertest';
 import { AuthService } from '../../src/auth';
 import { TEST_PASSWORD, TEST_DISPLAY_NAME, ADMIN_EMAIL, ADMIN_DISPLAY_NAME } from './test-constants';
 
+const fixtureCookies = new WeakMap<INestApplication, Map<string, string>>();
+
+export async function sessionCookie(app: INestApplication, fixtureId: string): Promise<string> {
+  const cookies = fixtureCookies.get(app) ?? new Map<string, string>();
+  fixtureCookies.set(app, cookies);
+  const existing = cookies.get(fixtureId);
+  if (existing) return existing;
+  const auth = app.get(AuthService);
+  const actual = await auth.getUserById(fixtureId);
+  const user = actual ?? (await auth.signInWithGoogle({
+    googleId: `fixture-${fixtureId}`,
+    email: `fixture-${randomUUID()}@example.com`,
+    displayName: fixtureId,
+  })).user;
+  const cookie = `keepit-session=${await auth.createSession(user.id)}`;
+  cookies.set(fixtureId, cookie);
+  return cookie;
+}
+
+export async function createAuthenticatedAgent(app: INestApplication) {
+  return request.agent(app.getHttpServer()).set('Cookie', await sessionCookie(app, 'default-test-member'));
+}
+
 /**
  * Create an admin session for testing
  * @param authService - AuthService instance from the test module

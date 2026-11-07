@@ -51,7 +51,13 @@ describe('SearchPage (e2e)', () => {
     mockedGetQuestionsAll.mockResolvedValue([
       {
         id: 'q-1',
+        authorId: 'user-1',
         title: '수학 미적분 질문',
+        body: '미적분 질문 본문',
+        attachments: [],
+        visibility: 'nickname',
+        viewCount: 0,
+        updatedAt: '2026-10-30T00:00:00.000Z',
         subject: '수학',
         grade: '2',
         likeCount: 3,
@@ -96,5 +102,12 @@ describe('SearchPage (e2e)', () => {
     expect(screen.getByRole('link', { name: '질문 보기' })).toHaveAttribute('href', '/questions/q-1');
     expect(screen.getByRole('link', { name: '커뮤니티에서 보기' })).toHaveAttribute('href', '/community/posts/post-1');
     expect(screen.getByRole('link', { name: '영상 보기' })).toHaveAttribute('href', '/videos/v-1');
+    expect(screen.getByLabelText('좋아요 3개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('답변 1개')).toHaveTextContent('\u{1F5E8}\uFE0E');
+    expect(screen.getByRole('link', { name: '답변 1개 보기' })).toHaveAttribute('href', '/questions/q-1#answers');
+    expect(screen.getByLabelText('조회 10회')).toHaveTextContent('\u{1F441}\uFE0E');
+    expect(screen.getByLabelText('좋아요 2개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 25회')).toHaveTextContent('\u{1F441}\uFE0E');
+    expect(screen.getByLabelText('좋아요 7개')).toHaveTextContent('\u2661');
   });
 });

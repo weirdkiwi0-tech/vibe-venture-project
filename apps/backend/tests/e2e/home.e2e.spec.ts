@@ -4,12 +4,15 @@ import { randomUUID } from 'crypto';
 import { rm } from 'fs/promises';
 import { resolve } from 'path';
 import request from 'supertest';
+import cookieParser from 'cookie-parser';
+import { createAuthenticatedAgent } from '../support/e2e-helpers';
 import { AppModule } from '../../src/app.module';
 
 jest.setTimeout(15000);
 
 describe('Home API (e2e)', () => {
   let app: INestApplication;
+  let member: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
   const originalDbPath = process.env.DB_PATH;
   let testDbPath = '';
 
@@ -22,6 +25,7 @@ describe('Home API (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -30,6 +34,7 @@ describe('Home API (e2e)', () => {
       }),
     );
     await app.init();
+    member = await createAuthenticatedAgent(app);
   });
 
   afterAll(async () => {
@@ -43,7 +48,7 @@ describe('Home API (e2e)', () => {
   });
 
   it('GET /home -> 200 with feed and metadata', async () => {
-    await request(app.getHttpServer()).post('/videos').send({
+    await member.post('/videos').send({
       title: 'home video',
       url: 'https://stream.test/home-video',
       durationSeconds: 180,
@@ -64,7 +69,7 @@ describe('Home API (e2e)', () => {
     const ids: string[] = [];
 
     for (let i = 0; i < 12; i += 1) {
-      const created = await request(app.getHttpServer()).post('/questions').send({
+      const created = await member.post('/questions').send({
         title: `home-policy-e2e-${i}`,
         body: 'policy body',
         subject: 'MATH',
@@ -80,7 +85,7 @@ describe('Home API (e2e)', () => {
       }
     }
 
-    await request(app.getHttpServer()).patch(`/questions/${ids[7]}/solve`);
+    await member.patch(`/questions/${ids[7]}/solve`).expect(200);
 
     for (let v = 0; v < 1; v += 1) {
       await request(app.getHttpServer()).get(`/questions/${ids[8]}`);

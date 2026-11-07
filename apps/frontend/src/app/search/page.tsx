@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { SiteShell } from '../../components/site-shell';
 import { SectionCard } from '../../components/section-card';
+import { ContentMetric } from '../../components/content-metric';
 import { getAllVideos, getCommunityBoard, getQuestionsAll } from '../../lib/api';
 
 interface SearchParams {
@@ -67,7 +68,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       <strong>{item.title}</strong>
                       <span className="community-badge subtle">{item.subject} · 고{item.grade}</span>
                     </div>
-                    <p className="card-meta">좋아요 {item.likeCount} · 답변 {item.answerCount}</p>
+                    <p className="card-meta content-metrics">
+                      <ContentMetric kind="like" count={item.likeCount} />
+                      <ContentMetric kind="answer" count={item.answerCount} href={`/questions/${item.id}#answers`} />
+                    </p>
                     <div className="hero-actions">
                       <Link className="secondary-button" href={`/questions/${item.id}`}>질문 보기</Link>
                     </div>
@@ -88,7 +92,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       <strong>{item.title}</strong>
                       <span className="card-meta">{item.authorName}</span>
                     </div>
-                    <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount}</p>
+                    <p className="card-meta content-metrics">
+                      <ContentMetric kind="view" count={item.viewCount} />
+                      <ContentMetric kind="like" count={item.likeCount} />
+                    </p>
                     <div className="hero-actions">
                       <Link className="secondary-button" href={`/community/posts/${item.id}`}>커뮤니티에서 보기</Link>
                     </div>
@@ -109,7 +116,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                       <strong>{item.title}</strong>
                       <span className="community-badge subtle">{item.subject || '일반'}</span>
                     </div>
-                    <p className="card-meta">조회 {item.viewCount} · 좋아요 {item.likeCount}</p>
+                    <p className="card-meta content-metrics">
+                      <ContentMetric kind="view" count={item.viewCount} />
+                      <ContentMetric kind="like" count={item.likeCount} />
+                    </p>
                     <div className="hero-actions">
                       <Link className="secondary-button" href={`/videos/${item.id}`}>영상 보기</Link>
                     </div>

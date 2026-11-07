@@ -215,10 +215,12 @@ export class VideosController {
   async getPlaybackPolicy(
     @Param('id') id: string,
     @Query() query: PlaybackPolicyQueryDto,
+    @Req() req: Request,
   ) {
+    const user = await this.authService.getUserBySessionId(req.cookies?.['keepit-session']);
     return this.videosService.getPlaybackPolicy(
       id,
-      query.viewerType,
+      user ? 'member' : 'guest',
       query.positionPercent,
     );
   }

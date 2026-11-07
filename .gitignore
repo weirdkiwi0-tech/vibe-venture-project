@@ -28,6 +28,9 @@ apps/backend/data/
 **/*.sqlite3-journal
 **/*.db
 **/*.db-journal
+**/*.state/
+**/*.bin
+**/*.bin.*.tmp
 *.log
 .DS_Store
 tmp/
@@ -46,3 +49,7 @@ tmp/
 *.pfx
 id_rsa
 id_ed25519
+
+# Local presentation and scratch files
+/피피티.pdf
+/작1

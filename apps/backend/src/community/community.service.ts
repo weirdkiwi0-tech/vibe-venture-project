@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { attachLocalState } from '../db/local-state';
 import { AuthService } from '../auth/auth.service';
 import type {
   CommunityBoardResponse,
@@ -67,7 +68,10 @@ export class CommunityService {
   private readonly friendships = new Set<string>();
   private readonly friendRequests: FriendRequestRecord[] = [];
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {
+    attachLocalState(this, 'community', ['profiles', 'posts', 'postLikes', 'postComments', 'commentLikes', 'directMessages', 'friendships', 'friendRequests'],
+      ['createPost', 'updatePost', 'getPostDetail', 'createPostComment', 'updatePostComment', 'likePostComment', 'likePost', 'deletePost', 'deleteCommentForModeration', 'requestFriend', 'acceptFriendRequest', 'rejectFriendRequest', 'sendDirectMessage']);
+  }
 
   async getBoard(currentUserId = 'student-jun', page = 1, query = ''): Promise<CommunityBoardResponse> {
     const normalizedQuery = query.trim().toLowerCase();
@@ -179,7 +183,7 @@ export class CommunityService {
     const outgoing = requests.find((request) => request.requesterId === profileId && request.status === 'pending' && request.targetId === viewerId);
 
     const recentPosts = this.posts
-      .filter((post) => post.authorId === profileId)
+      .filter((post) => post.authorId === profileId && post.authorVisibility !== 'anonymous')
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 5)
       .map((post) => ({
@@ -407,6 +411,23 @@ export class CommunityService {
       throw new ForbiddenException('only author can delete post');
     }
     this.posts.splice(postIndex, 1);
+    this.postLikes.delete(postId);
+    for (const comment of this.postComments.get(postId) ?? []) this.commentLikes.delete(comment.id);
+    this.postComments.delete(postId);
+  }
+
+  async deleteCommentForModeration(commentId: string): Promise<boolean> {
+    for (const [postId, comments] of this.postComments) {
+      if (!comments.some(comment => comment.id === commentId)) continue;
+      const deleted = new Set([commentId]);
+      for (const comment of comments) {
+        if (comment.parentCommentId && deleted.has(comment.parentCommentId)) deleted.add(comment.id);
+      }
+      this.postComments.set(postId, comments.filter(comment => !deleted.has(comment.id)));
+      for (const id of deleted) this.commentLikes.delete(id);
+      return true;
+    }
+    return false;
   }
 
   async requestFriend(requesterId: string, targetId: string) {

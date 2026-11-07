@@ -21,35 +21,30 @@ export class CommunityController {
   private async resolveAuthenticatedUserId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
     const sessionUser = await this.authService.getUserBySessionId(sessionId);
-    if (sessionUser) {
-      return sessionUser.id;
-    }
-
-    if (!headerUserId) {
-      return undefined;
-    }
-
-    const headerUser = await this.authService.getUserById(headerUserId);
-    return headerUser?.id;
+    return sessionUser?.id;
   }
 
   private async resolveViewerId(req: Request, headerUserId?: string) {
     const sessionId = req.cookies?.['keepit-session'] as string | undefined;
     const sessionUser = await this.authService.getUserBySessionId(sessionId);
-    return sessionUser?.id ?? headerUserId;
+    return sessionUser?.id;
   }
 
   @Get()
   async getBoard(
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('query') query?: string,
     @Headers('x-user-id') currentUserId?: string,
   ) {
-    return this.communityService.getBoard(currentUserId, page ? parseInt(page, 10) : 1, query ?? '');
+    const viewerId = await this.resolveAuthenticatedUserId(req);
+    return this.communityService.getBoard(viewerId ?? 'guest-user', page ? parseInt(page, 10) : 1, query ?? '');
   }
 
   @Post('posts')
-  async createPost(@Body() body: CreateCommunityPostDto, @Headers('x-user-id') authorId?: string) {
+  async createPost(@Body() body: CreateCommunityPostDto, @Req() req: Request) {
+    const authorId = await this.resolveAuthenticatedUserId(req);
+    if (!authorId) throw new UnauthorizedException('login required to create post');
     return this.communityService.createPost(
       {
         title: body.title,
@@ -103,7 +98,7 @@ export class CommunityController {
     @Query('currentUserId') currentUserId?: string,
     @Headers('x-user-id') currentUserHeader?: string,
   ) {
-    const viewerId = (await this.resolveAuthenticatedUserId(req, currentUserHeader)) ?? currentUserId;
+    const viewerId = await this.resolveAuthenticatedUserId(req);
     return this.communityService.getProfile(id, viewerId);
   }
 
@@ -168,7 +163,9 @@ export class CommunityController {
   }
 
   @Get('my/posts')
-  async getMyPosts(@Headers('x-user-id') currentUserId?: string) {
+  async getMyPosts(@Req() req: Request) {
+    const currentUserId = await this.resolveAuthenticatedUserId(req);
+    if (!currentUserId) throw new UnauthorizedException('login required to view own posts');
     return this.communityService.getMyPosts(currentUserId);
   }
 
@@ -194,6 +191,7 @@ export class CommunityController {
     @Headers('x-user-id') userIdHeader?: string,
   ) {
     const requestUserId = await this.resolveViewerId(req, userIdHeader);
+    if (!requestUserId) throw new UnauthorizedException('login required to delete post');
     await this.communityService.deletePost(id, requestUserId);
     return { success: true };
   }

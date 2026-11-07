@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useId, useState } from 'react';
 import { getPublicProfileActivity } from '../lib/api';
 import type { PublicProfileActivity as ProfileActivity } from '../lib/types';
+import { ContentMetric } from './content-metric';
 
 interface PublicProfileActivityProps {
   profileId: string;
@@ -87,9 +88,10 @@ export function PublicProfileActivity({ profileId, viewerId }: PublicProfileActi
                     {item.title}
                   </Link>
                 </h4>
-                <p className="card-meta">
+                <p className="card-meta content-metrics">
                   <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString('ko-KR')}</time>
-                  {' · '}조회 {item.viewCount} · 좋아요 {item.likeCount}
+                  <ContentMetric kind="view" count={item.viewCount} />
+                  <ContentMetric kind="like" count={item.likeCount} />
                 </p>
               </article>
             )) : <p className="card-meta">{selectedTab.empty}</p>}

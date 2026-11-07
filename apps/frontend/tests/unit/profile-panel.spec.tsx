@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfilePanel } from '../../src/components/profile-panel';
+import { createTopPolicyQuestions } from '../support/top-policy-fixtures';
 
 const getMyQuestionsMock = jest.fn().mockResolvedValue([]);
 const getMyAnswersMock = jest.fn().mockResolvedValue([]);
@@ -150,6 +151,33 @@ describe('ProfilePanel (unit)', () => {
 
     expect(screen.getByRole('tab', { name: /내 친구/ })).toHaveTextContent('요청 1');
     expect(screen.getByText('받은 친구 요청')).toBeInTheDocument();
+  });
+
+  it('shows the same monochrome metrics in each own-content tab', async () => {
+    const createdAt = '2026-11-05T00:00:00.000Z';
+    getMyVideosMock.mockResolvedValueOnce([{
+      id: 'my-video', title: 'My video', subject: '수학', url: '/video.mp4',
+      durationSeconds: 60, likeCount: 2, viewCount: 5, createdAt,
+    }]);
+    getMyQuestionsMock.mockResolvedValueOnce([{
+      ...createTopPolicyQuestions(1)[0], authorId: stableAuthUser.id, likeCount: 1, answerCount: 3,
+    }]);
+    getMyCommunityPostsMock.mockResolvedValueOnce([{
+      id: 'my-post', title: 'My post', content: 'Post body', attachments: [],
+      authorId: stableAuthUser.id, authorName: stableAuthUser.displayName, isMine: true,
+      likeCount: 4, viewCount: 6, createdAt,
+    }]);
+    const { user } = renderProfilePanel();
+    await screen.findByText('My video');
+    expect(screen.getByLabelText('좋아요 2개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 5회')).toHaveTextContent('\u{1F441}\uFE0E');
+    await user.click(screen.getByRole('tab', { name: /질문 작성/ }));
+    expect(screen.getByLabelText('좋아요 1개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('답변 3개')).toHaveTextContent('\u{1F5E8}\uFE0E');
+    expect(screen.getByRole('link', { name: '답변 3개 보기' })).toHaveAttribute('href', '/questions/q-0#answers');
+    await user.click(screen.getByRole('tab', { name: /커뮤니티/ }));
+    expect(screen.getByLabelText('좋아요 4개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 6회')).toHaveTextContent('\u{1F441}\uFE0E');
   });
 
   it('댓글 옆 우편함 탭에서 알림을 확인할 수 있다', async () => {

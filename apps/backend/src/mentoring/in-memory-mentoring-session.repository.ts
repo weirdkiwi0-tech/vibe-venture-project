@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { attachLocalState } from '../db/local-state';
 import { MentoringSessionEntity } from './entities/mentoring-session.entity';
 import { MentoringSessionRepository } from './mentoring-session.repository';
 
@@ -7,6 +8,10 @@ export class InMemoryMentoringSessionRepository
   implements MentoringSessionRepository
 {
   private readonly store = new Map<string, MentoringSessionEntity>();
+
+  constructor() {
+    attachLocalState(this, 'mentoring-sessions', ['store'], ['save'], { store: MentoringSessionEntity.prototype });
+  }
 
   async save(session: MentoringSessionEntity): Promise<void> {
     this.store.set(session.id, session);

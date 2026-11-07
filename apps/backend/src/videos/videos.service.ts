@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { TableClient } from '@azure/data-tables';
 import { randomUUID } from 'crypto';
+import { attachLocalState } from '../db/local-state';
 import { AuthService } from '../auth';
 import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -38,7 +39,9 @@ export class VideosService {
     private readonly videoRepository: VideoRepository,
     @Optional() private readonly authService?: AuthService,
     @Optional() private readonly legacyAuthService?: AuthService,
-  ) {}
+  ) {
+    attachLocalState(this, 'video-interactions', ['likesByVideoId', 'commentsByVideoId', 'commentLikesByCommentId'], ['like', 'createComment', 'likeComment', 'deleteById', 'deleteCommentForModeration']);
+  }
 
   private async ensureReady() {
     if (!this.useTableStorage) {
@@ -211,6 +214,16 @@ export class VideosService {
   async listByUploaderId(uploaderId: string) {
     const videos = await this.videoRepository.listByUploaderId(uploaderId);
     return videos.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async deleteCommentForModeration(commentId: string): Promise<boolean> {
+    for (const [videoId, comments] of this.commentsByVideoId) {
+      if (!comments.some(comment => comment.id === commentId)) continue;
+      this.commentsByVideoId.set(videoId, comments.filter(comment => comment.id !== commentId));
+      this.commentLikesByCommentId.delete(commentId);
+      return true;
+    }
+    return false;
   }
 
   async listComments(videoId: string): Promise<VideoCommentItem[]> {

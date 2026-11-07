@@ -24,7 +24,7 @@ export default async function QuestionDetailPage({ params }: { params: Promise<{
           <AnswerForm questionId={question.id} />
         </SectionCard>
 
-        <SectionCard eyebrow="이전 답변" title="등록된 답변 목록">
+        <SectionCard id="answers" className="discussion-section" eyebrow="이전 답변" title="등록된 답변 목록">
           <QuestionAnswerList initialAnswers={answers} />
         </SectionCard>
       </SiteShell>

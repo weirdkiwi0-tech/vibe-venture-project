@@ -21,7 +21,7 @@ export class UploadSessionGuard implements CanActivate {
 
 @Controller('uploads')
 export class UploadsController {
-  constructor(private readonly uploads: UploadsService) {}
+  constructor(private readonly uploads: UploadsService, private readonly authService: AuthService) {}
 
   @Post()
   @UseGuards(UploadSessionGuard)
@@ -37,11 +37,24 @@ export class UploadsController {
   @Get(':name')
   async download(@Param('name') name: string, @Req() request: Request, @Res() response: Response) {
     const file = await this.uploads.open(name);
+    if (file.contentType.startsWith('video/')) {
+      const user = await this.authService.getUserBySessionId(request.cookies?.['keepit-session']);
+      if (!user) throw new UnauthorizedException('full video requires an authenticated session');
+    }
+    return this.sendFile(name, file, request, response, false);
+  }
+
+  @Get(':name/preview')
+  async preview(@Param('name') name: string, @Req() request: Request, @Res() response: Response) {
+    return this.sendFile(`${name}.preview.mp4`, await this.uploads.openPreview(name), request, response, true);
+  }
+
+  private async sendFile(name: string, file: Awaited<ReturnType<UploadsService['open']>>, request: Request, response: Response, preview: boolean) {
     response.set({
       'Accept-Ranges': 'bytes',
       'Content-Type': file.contentType,
       'X-Content-Type-Options': 'nosniff',
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': file.contentType.startsWith('video/') && !preview ? 'private, no-store' : 'public, max-age=31536000, immutable',
       'Content-Disposition': `${file.contentType === 'application/pdf' ? 'attachment' : 'inline'}; filename="${name}"`,
     });
     let start = 0;

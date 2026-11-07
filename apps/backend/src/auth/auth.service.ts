@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { attachLocalState } from '../db/local-state';
 import { TableClient } from '@azure/data-tables';
 import { UserRole } from './roles';
 
@@ -49,7 +50,7 @@ interface SessionRow {
 
 interface AuthStorage {
   signUpLocal(input: LocalAccountInput, role: UserRole): Promise<{ user: AuthUser; isNewUser: boolean }>;
-  signInLocal(email: string, password: string, resolveRoleByEmail: (email: string) => UserRole): Promise<AuthUser>;
+  signInLocal(email: string, password: string): Promise<AuthUser>;
   signInWithGoogle(profile: GoogleProfileInput, role: UserRole): Promise<{ user: AuthUser; isNewUser: boolean }>;
   createSession(userId: string): Promise<string>;
   revokeSession(sessionId: string): Promise<void>;
@@ -91,6 +92,11 @@ class InMemoryAuthStorage implements AuthStorage {
   private readonly localAccounts = new Map<string, { userId: string; password: string }>();
   private readonly sessions = new Map<string, string>();
 
+  constructor(persist = true) {
+    if (persist) attachLocalState(this, 'auth', ['users', 'userIdByEmail', 'userIdByGoogleId', 'localAccounts', 'sessions'],
+      ['signUpLocal', 'signInLocal', 'signInWithGoogle', 'createSession', 'revokeSession', 'deleteUser', 'banUser', 'unbanUser', 'updateUserRole']);
+  }
+
   async signUpLocal(input: LocalAccountInput, role: UserRole): Promise<{ user: AuthUser; isNewUser: boolean }> {
     const email = input.email.trim().toLowerCase();
     const displayName = input.displayName.trim();
@@ -114,11 +120,13 @@ class InMemoryAuthStorage implements AuthStorage {
 
     this.users.set(user.id, user);
     this.userIdByEmail.set(email, user.id);
-    this.localAccounts.set(email, { userId: user.id, password: input.password });
+    const salt = randomBytes(16).toString('hex');
+    const password = `${salt}:${scryptSync(input.password, salt, 64).toString('hex')}`;
+    this.localAccounts.set(email, { userId: user.id, password });
     return { user: { ...user }, isNewUser: true };
   }
 
-  async signInLocal(email: string, password: string, resolveRoleByEmail: (email: string) => UserRole): Promise<AuthUser> {
+  async signInLocal(email: string, password: string): Promise<AuthUser> {
     const emailLower = email.trim().toLowerCase();
     const account = this.localAccounts.get(emailLower);
 
@@ -129,19 +137,15 @@ class InMemoryAuthStorage implements AuthStorage {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
-    if (account.password !== password) {
+    const [salt, digest] = account.password.split(':');
+    const hash = Buffer.from(digest ?? '', 'hex');
+    if (!salt || hash.length !== 64 || !timingSafeEqual(hash, scryptSync(password, salt, 64))) {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
     const user = this.users.get(account.userId);
     if (!user) {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
-    }
-
-    const resolvedRole = resolveRoleByEmail(emailLower);
-    if (user.role !== resolvedRole) {
-      user.role = resolvedRole;
-      user.updatedAt = new Date();
     }
 
     return { ...user };
@@ -157,7 +161,7 @@ class InMemoryAuthStorage implements AuthStorage {
       user.email = email;
       user.displayName = profile.displayName;
       user.photoUrl = profile.photoUrl ?? DEFAULT_PROFILE_PHOTO_URL;
-      user.role = role;
+      if (role === 'admin') user.role = role;
       user.updatedAt = now;
       this.userIdByEmail.set(email, user.id);
       return { user: { ...user }, isNewUser: false };
@@ -169,7 +173,7 @@ class InMemoryAuthStorage implements AuthStorage {
       user.googleId = profile.googleId;
       user.displayName = profile.displayName;
       user.photoUrl = profile.photoUrl ?? DEFAULT_PROFILE_PHOTO_URL;
-      user.role = role;
+      if (role === 'admin') user.role = role;
       user.updatedAt = now;
       this.userIdByGoogleId.set(profile.googleId, user.id);
       return { user: { ...user }, isNewUser: false };
@@ -427,7 +431,7 @@ class AzureTableAuthStorage implements AuthStorage {
     return { user, isNewUser: true };
   }
 
-  async signInLocal(email: string, password: string, resolveRoleByEmail: (email: string) => UserRole): Promise<AuthUser> {
+  async signInLocal(email: string, password: string): Promise<AuthUser> {
     await this.ensureReady();
 
     const emailLower = email.trim().toLowerCase();
@@ -454,17 +458,6 @@ class AzureTableAuthStorage implements AuthStorage {
     const user = await this.getUserById(userId);
     if (!user) {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
-    }
-
-    const resolvedRole = resolveRoleByEmail(emailLower);
-    if (user.role !== resolvedRole) {
-      await this.usersClient.updateEntity({
-        partitionKey: 'users',
-        rowKey: user.id,
-        role: resolvedRole,
-        updated_at: new Date().toISOString(),
-      }, 'Merge');
-      user.role = resolvedRole;
     }
 
     return user;
@@ -681,7 +674,7 @@ export class AuthService {
     const provider = (process.env.AUTH_STORAGE_PROVIDER ?? 'auto').trim().toLowerCase();
 
     if (provider === 'memory') {
-      this.storage = new InMemoryAuthStorage();
+      this.storage = new InMemoryAuthStorage(false);
       return;
     }
 
@@ -742,12 +735,15 @@ export class AuthService {
   }
 
   async signUpLocal(input: LocalAccountInput): Promise<{ user: AuthUser; isNewUser: boolean }> {
-    const role = this.resolveRoleByEmail(input.email);
-    return this.storage.signUpLocal(input, role);
+    return this.storage.signUpLocal(input, 'user');
+  }
+
+  isReservedAdministratorEmail(email: string): boolean {
+    return this.resolveRoleByEmail(email) === 'admin';
   }
 
   async signInLocal(email: string, password: string): Promise<AuthUser> {
-    const user = await this.storage.signInLocal(email, password, this.resolveRoleByEmail.bind(this));
+    const user = await this.storage.signInLocal(email, password);
     const banInfo = this.getBanInfo(user);
     if (banInfo.isBanned && banInfo.bannedUntil) {
       throw new UnauthorizedException(`이 계정은 밴 상태입니다. 해제 예정 시각: ${new Date(banInfo.bannedUntil).toLocaleString('ko-KR')}`);

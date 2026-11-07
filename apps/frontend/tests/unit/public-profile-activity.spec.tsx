@@ -70,10 +70,16 @@ describe('public profile activity', () => {
     expect(await screen.findByRole('link', { name: '함께 공부해요' }))
       .toHaveAttribute('href', '/community/posts/post-1');
     expect(screen.getByRole('tab', { name: /커뮤니티 글/ })).toHaveTextContent('1');
+    expect(screen.getByLabelText('좋아요 2개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 3회')).toHaveTextContent('\u{1F441}\uFE0E');
     await user.click(screen.getByRole('tab', { name: /질문/ }));
     expect(screen.getByRole('link', { name: '수학 질문' })).toHaveAttribute('href', '/questions/question-1');
+    expect(screen.getByLabelText('좋아요 1개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 2회')).toHaveTextContent('\u{1F441}\uFE0E');
     await user.click(screen.getByRole('tab', { name: /영상/ }));
     expect(screen.getByRole('link', { name: '수학 풀이 영상' })).toHaveAttribute('href', '/videos/video-1');
+    expect(screen.getByLabelText('좋아요 0개')).toHaveTextContent('\u2661');
+    expect(screen.getByLabelText('조회 1회')).toHaveTextContent('\u{1F441}\uFE0E');
     expect(getActivityMock).toHaveBeenCalledWith(profileId, 'viewer');
   });
 

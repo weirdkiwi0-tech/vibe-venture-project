@@ -1,10 +1,14 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { createAdminSession, createAuthenticatedAgent } from '../support/e2e-helpers';
+import { AuthService } from '../../src/auth';
 import { AppModule } from '../../src/app.module';
 
 describe('Rewards API (e2e)', () => {
   let app: INestApplication;
+  let member: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
 
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -12,6 +16,7 @@ describe('Rewards API (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -20,6 +25,8 @@ describe('Rewards API (e2e)', () => {
       }),
     );
     await app.init();
+    member = await createAuthenticatedAgent(app);
+    member.set('Cookie', `keepit-session=${await createAdminSession(app.get(AuthService))}`);
   });
 
   afterAll(async () => {
@@ -27,7 +34,7 @@ describe('Rewards API (e2e)', () => {
   });
 
   it('POST /rewards/earn -> 201', async () => {
-    const res = await request(app.getHttpServer()).post('/rewards/earn').send({
+    const res = await member.post('/rewards/earn').send({
       userId: 'u-reward',
       reason: 'contribution',
       points: 40,
@@ -38,18 +45,18 @@ describe('Rewards API (e2e)', () => {
   });
 
   it('GET /rewards/users/:userId/history -> 200 with total points', async () => {
-    await request(app.getHttpServer()).post('/rewards/earn').send({
+    await member.post('/rewards/earn').send({
       userId: 'u-history',
       reason: 'activity-1',
       points: 10,
     });
-    await request(app.getHttpServer()).post('/rewards/earn').send({
+    await member.post('/rewards/earn').send({
       userId: 'u-history',
       reason: 'activity-2',
       points: 15,
     });
 
-    const res = await request(app.getHttpServer()).get(
+    const res = await member.get(
       '/rewards/users/u-history/history',
     );
 

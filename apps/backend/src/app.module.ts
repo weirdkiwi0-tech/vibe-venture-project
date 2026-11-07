@@ -1,4 +1,6 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { SessionIdentityGuard } from './auth/session-identity.guard';
 import { AdminModule } from './admin';
 import { AuthModule } from './auth';
 import { AuthService } from './auth/auth.service';
@@ -27,6 +29,7 @@ import { UploadsModule } from './uploads/uploads.module';
     RewardsModule,
     UploadsModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: SessionIdentityGuard }],
 })
 export class AppModule implements OnModuleInit {
   constructor(private readonly authService: AuthService) {}

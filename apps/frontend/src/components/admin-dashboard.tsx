@@ -77,7 +77,7 @@ export function AdminDashboard({ overview, users, breaches, currentRole }: Admin
   const tabButtons: Array<{ key: AdminTab; label: string; icon: string; count?: number }> = [
     { key: 'overview', label: '개요', icon: '📊' },
     { key: 'users', label: '계정 관리', icon: '👤', count: users.length },
-    { key: 'reports', label: '신고', icon: '🚩', count: pendingCount },
+    { key: 'reports', label: '신고', icon: '\u2691', count: pendingCount },
     { key: 'sla', label: 'SLA', icon: '⏱️', count: breaches.length },
   ];
 

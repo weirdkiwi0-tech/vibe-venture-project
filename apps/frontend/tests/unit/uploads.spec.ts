@@ -1,4 +1,4 @@
-import { attachmentKind, prepareProfilePhoto, uploadFile, uploadFiles } from '../../src/lib/uploads';
+import { attachmentKind, prepareProfilePhoto, uploadFile, uploadFiles, videoSource } from '../../src/lib/uploads';
 
 jest.mock('../../src/lib/api', () => ({ getApiBaseUrl: () => 'http://localhost:3001' }));
 jest.mock('browser-image-compression', () => ({
@@ -23,6 +23,13 @@ class UploadRequest {
 }
 
 describe('media uploads', () => {
+  it('uses protected previews only for guest uploaded videos', () => {
+    const url = 'http://localhost:3001/uploads/11111111-1111-1111-1111-111111111111.mp4';
+    expect(videoSource(url, false)).toBe(`${url}/preview`);
+    expect(videoSource(url, true)).toBe(url);
+    expect(videoSource('/uploads/11111111-1111-1111-1111-111111111111.webm', false)).toMatch(/\/preview$/);
+    expect(videoSource('https://stream.test/external.mp4', false)).toBe('https://stream.test/external.mp4');
+  });
   const originalRequest = global.XMLHttpRequest;
   beforeEach(() => {
     UploadRequest.instances = [];

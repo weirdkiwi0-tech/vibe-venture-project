@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { attachLocalState } from '../db/local-state';
 import { VideoEntity } from './entities/video.entity';
 import { VideoRepository } from './videos.repository';
 
 @Injectable()
 export class InMemoryVideoRepository implements VideoRepository {
   private readonly store = new Map<string, VideoEntity>();
+
+  constructor() {
+    attachLocalState(this, 'videos', ['store'], ['save', 'deleteById'], { store: VideoEntity.prototype });
+  }
 
   async save(video: VideoEntity): Promise<void> {
     this.store.set(video.id, video);

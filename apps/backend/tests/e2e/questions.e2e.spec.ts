@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { resolve } from 'path';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { createAuthenticatedAgent, sessionCookie } from '../support/e2e-helpers';
 import { AppModule } from '../../src/app.module';
 import { AuthService } from '../../src/auth';
 
@@ -12,6 +13,7 @@ jest.setTimeout(15000);
 
 describe('Questions API (e2e)', () => {
   let app: INestApplication;
+  let member: Awaited<ReturnType<typeof createAuthenticatedAgent>>;
   let authService: AuthService;
   const originalDbPath = process.env.DB_PATH;
   let testDbPath = '';
@@ -34,6 +36,7 @@ describe('Questions API (e2e)', () => {
       }),
     );
     await app.init();
+    member = await createAuthenticatedAgent(app);
     authService = moduleRef.get(AuthService);
   });
 
@@ -48,7 +51,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('POST /questions -> 201', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       title: 'E2E title',
       body: 'E2E body',
       subject: 'MATH',
@@ -64,7 +67,7 @@ describe('Questions API (e2e)', () => {
 
   it('POST /questions defaults visibility to anonymous and keeps it in list/detail', async () => {
     const uniqueTitle = `visibility-default-${Date.now()}`;
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: uniqueTitle,
       body: 'body',
       subject: 'MATH',
@@ -74,20 +77,20 @@ describe('Questions API (e2e)', () => {
     expect(created.status).toBe(201);
     expect(created.body.visibility).toBe('anonymous');
 
-    const listRes = await request(app.getHttpServer()).get(
+    const listRes = await member.get(
       `/questions?title=${encodeURIComponent(uniqueTitle)}`,
     );
     expect(listRes.status).toBe(200);
     expect(listRes.body[0].visibility).toBe('anonymous');
 
-    const detailRes = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detailRes = await member.get(`/questions/${created.body.id}`);
     expect(detailRes.status).toBe(200);
     expect(detailRes.body.visibility).toBe('anonymous');
   });
 
   it('POST /questions stores nickname visibility and keeps it in list/detail', async () => {
     const uniqueTitle = `visibility-nickname-${Date.now()}`;
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: uniqueTitle,
       body: 'body',
       subject: 'MATH',
@@ -98,13 +101,13 @@ describe('Questions API (e2e)', () => {
     expect(created.status).toBe(201);
     expect(created.body.visibility).toBe('nickname');
 
-    const listRes = await request(app.getHttpServer()).get(
+    const listRes = await member.get(
       `/questions?title=${encodeURIComponent(uniqueTitle)}`,
     );
     expect(listRes.status).toBe(200);
     expect(listRes.body[0].visibility).toBe('nickname');
 
-    const detailRes = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detailRes = await member.get(`/questions/${created.body.id}`);
     expect(detailRes.status).toBe(200);
     expect(detailRes.body.visibility).toBe('nickname');
   });
@@ -114,14 +117,14 @@ describe('Questions API (e2e)', () => {
     const anonymousTitle = `visibility-all-anonymous-${Date.now()}`;
     const nicknameTitle = `visibility-all-nickname-${Date.now()}`;
 
-    const anonymousCreated = await request(app.getHttpServer()).post('/questions').set('x-user-id', authorId).send({
+    const anonymousCreated = await member.post('/questions').set('Cookie', await sessionCookie(app, authorId)).send({
       title: anonymousTitle,
       body: 'body',
       subject: 'MATH',
       grade: '2',
       visibility: 'anonymous',
     });
-    const nicknameCreated = await request(app.getHttpServer()).post('/questions').set('x-user-id', authorId).send({
+    const nicknameCreated = await member.post('/questions').set('Cookie', await sessionCookie(app, authorId)).send({
       title: nicknameTitle,
       body: 'body',
       subject: 'MATH',
@@ -132,15 +135,15 @@ describe('Questions API (e2e)', () => {
     expect(anonymousCreated.status).toBe(201);
     expect(nicknameCreated.status).toBe(201);
 
-    const listRes = await request(app.getHttpServer()).get(
+    const listRes = await member.get(
       `/questions?title=${encodeURIComponent('visibility-all-')}`,
     );
-    const allRes = await request(app.getHttpServer()).get(
+    const allRes = await member.get(
       `/questions/all?title=${encodeURIComponent('visibility-all-')}`,
     );
-    const mineRes = await request(app.getHttpServer()).get('/questions/mine').set('x-user-id', authorId);
-    const anonymousDetailRes = await request(app.getHttpServer()).get(`/questions/${anonymousCreated.body.id}`);
-    const nicknameDetailRes = await request(app.getHttpServer()).get(`/questions/${nicknameCreated.body.id}`);
+    const mineRes = await member.get('/questions/mine').set('Cookie', await sessionCookie(app, authorId));
+    const anonymousDetailRes = await member.get(`/questions/${anonymousCreated.body.id}`);
+    const nicknameDetailRes = await member.get(`/questions/${nicknameCreated.body.id}`);
 
     expect(listRes.status).toBe(200);
     expect(allRes.status).toBe(200);
@@ -183,7 +186,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('POST /questions -> 400 when visibility is invalid', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       title: 'invalid visibility',
       body: 'body',
       subject: 'MATH',
@@ -195,7 +198,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('POST /questions -> 400 when title missing', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       body: 'E2E body',
       subject: 'MATH',
       grade: '2',
@@ -210,13 +213,13 @@ describe('Questions API (e2e)', () => {
     ['subject', { title: 'E2E title', body: 'E2E body', subject: '   ', grade: '2' }],
     ['grade', { title: 'E2E title', body: 'E2E body', subject: 'MATH', grade: '   ' }],
   ])('POST /questions -> 400 when %s is blank', async (_field, payload) => {
-    const res = await request(app.getHttpServer()).post('/questions').send(payload);
+    const res = await member.post('/questions').send(payload);
 
     expect(res.status).toBe(400);
   });
 
   it('POST /questions -> 201 for valid required fields', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       title: 'valid title',
       body: 'valid body',
       subject: 'MATH',
@@ -228,20 +231,20 @@ describe('Questions API (e2e)', () => {
   });
 
   it('GET /questions/:id -> 200 and 404', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'to fetch',
       body: 'body',
       subject: 'MATH',
       grade: '1',
     });
 
-    const ok = await request(app.getHttpServer()).get(
+    const ok = await member.get(
       `/questions/${created.body.id}`,
     );
     expect(ok.status).toBe(200);
     expect(ok.body.answerCount).toBe(0);
 
-    const notFound = await request(app.getHttpServer()).get('/questions/not-found');
+    const notFound = await member.get('/questions/not-found');
     expect(notFound.status).toBe(404);
   });
 
@@ -259,10 +262,10 @@ describe('Questions API (e2e)', () => {
     const ownerSession = await authService.createSession(owner.user.id);
     const reporterSession = await authService.createSession(reporter.user.id);
 
-    const created = await request(app.getHttpServer())
+    const created = await member
       .post('/questions')
       .set('Cookie', [`keepit-session=${ownerSession}`])
-      .set('x-user-id', owner.user.id)
+      .set('Cookie', await sessionCookie(app, owner.user.id))
       .send({
         title: `delete-target-${Date.now()}`,
         body: 'delete body',
@@ -272,7 +275,7 @@ describe('Questions API (e2e)', () => {
 
     expect(created.status).toBe(201);
 
-    const reportRes = await request(app.getHttpServer())
+    const reportRes = await member
       .post('/reports')
       .set('Cookie', [`keepit-session=${reporterSession}`])
       .send({
@@ -283,27 +286,27 @@ describe('Questions API (e2e)', () => {
       });
     expect(reportRes.status).toBe(201);
 
-    const deleted = await request(app.getHttpServer())
+    const deleted = await member
       .delete(`/questions/${created.body.id}`)
       .set('Cookie', [`keepit-session=${ownerSession}`])
-      .set('x-user-id', owner.user.id);
+      .set('Cookie', await sessionCookie(app, owner.user.id));
 
     expect(deleted.status).toBe(200);
     expect(deleted.body).toEqual({ success: true });
 
-    const detail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detail = await member.get(`/questions/${created.body.id}`);
     expect(detail.status).toBe(404);
   });
 
   it('POST/GET /questions/:id/answers and answerCount update', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'question with answers',
       body: 'body',
       subject: 'MATH',
       grade: '2',
     });
 
-    const createAnswerRes = await request(app.getHttpServer())
+    const createAnswerRes = await member
       .post(`/questions/${created.body.id}/answers`)
       .send({
         type: 'text',
@@ -313,13 +316,13 @@ describe('Questions API (e2e)', () => {
     expect(createAnswerRes.status).toBe(201);
     expect(createAnswerRes.body.questionId).toBe(created.body.id);
 
-    const listRes = await request(app.getHttpServer()).get(
+    const listRes = await member.get(
       `/questions/${created.body.id}/answers`,
     );
     expect(listRes.status).toBe(200);
     expect(listRes.body).toHaveLength(1);
 
-    const questionRes = await request(app.getHttpServer()).get(
+    const questionRes = await member.get(
       `/questions/${created.body.id}`,
     );
     expect(questionRes.status).toBe(200);
@@ -327,16 +330,18 @@ describe('Questions API (e2e)', () => {
   });
 
   it('shows just-created answer immediately and preserves author/content/type/attachments', async () => {
-    const createdQuestion = await request(app.getHttpServer()).post('/questions').send({
+    const teacherCookie = await sessionCookie(app, 'teacher-a');
+    const teacher = await authService.getUserBySessionId(teacherCookie.split('=')[1]);
+    const createdQuestion = await member.post('/questions').send({
       title: 'immediate answer visibility',
       body: 'body',
       subject: 'MATH',
       grade: '2',
     });
 
-    const createdAnswer = await request(app.getHttpServer())
+    const createdAnswer = await member
       .post(`/questions/${createdQuestion.body.id}/answers`)
-      .set('x-user-id', 'teacher-a')
+      .set('Cookie', await sessionCookie(app, 'teacher-a'))
       .send({
         type: 'video',
         content: 'video explanation',
@@ -344,26 +349,26 @@ describe('Questions API (e2e)', () => {
       });
 
     expect(createdAnswer.status).toBe(201);
-    expect(createdAnswer.body.authorId).toBe('teacher-a');
+    expect(createdAnswer.body.authorId).toBe(teacher?.id);
     expect(createdAnswer.body.content).toBe('video explanation');
     expect(createdAnswer.body.type).toBe('video');
     expect(createdAnswer.body.attachments).toEqual(['data:video/mp4;base64,AAAA']);
 
-    const listed = await request(app.getHttpServer()).get(
+    const listed = await member.get(
       `/questions/${createdQuestion.body.id}/answers`,
     );
 
     expect(listed.status).toBe(200);
     expect(listed.body).toHaveLength(1);
     expect(listed.body[0].id).toBe(createdAnswer.body.id);
-    expect(listed.body[0].authorId).toBe('teacher-a');
+    expect(listed.body[0].authorId).toBe(teacher?.id);
     expect(listed.body[0].content).toBe('video explanation');
     expect(listed.body[0].type).toBe('video');
     expect(listed.body[0].attachments).toEqual(['data:video/mp4;base64,AAAA']);
   });
 
   it('uses deterministic ordering for answers: createdAt asc, then id asc', async () => {
-    const createdQuestion = await request(app.getHttpServer()).post('/questions').send({
+    const createdQuestion = await member.post('/questions').send({
       title: 'deterministic answer order',
       body: 'body',
       subject: 'MATH',
@@ -376,9 +381,9 @@ describe('Questions API (e2e)', () => {
     try {
       const createdIds: string[] = [];
       for (let i = 0; i < 5; i += 1) {
-        const created = await request(app.getHttpServer())
+        const created = await member
           .post(`/questions/${createdQuestion.body.id}/answers`)
-          .set('x-user-id', `author-${i}`)
+          .set('Cookie', await sessionCookie(app, `author-${i}`))
           .send({
             type: 'text',
             content: `answer-${i}`,
@@ -387,7 +392,7 @@ describe('Questions API (e2e)', () => {
         createdIds.push(created.body.id);
       }
 
-      const listed = await request(app.getHttpServer()).get(
+      const listed = await member.get(
         `/questions/${createdQuestion.body.id}/answers`,
       );
 
@@ -400,27 +405,27 @@ describe('Questions API (e2e)', () => {
   });
 
   it('returns 404 for creating/listing answers on missing question', async () => {
-    const createRes = await request(app.getHttpServer())
+    const createRes = await member
       .post('/questions/not-found/answers')
       .send({
         type: 'text',
         content: 'answer on missing question',
       });
-    const listRes = await request(app.getHttpServer()).get('/questions/not-found/answers');
+    const listRes = await member.get('/questions/not-found/answers');
 
     expect(createRes.status).toBe(404);
     expect(listRes.status).toBe(404);
   });
 
   it('rejects non-video attachments when answer type is video', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'video-only attachment rule',
       body: 'body',
       subject: 'MATH',
       grade: '2',
     });
 
-    const res = await request(app.getHttpServer())
+    const res = await member
       .post(`/questions/${created.body.id}/answers`)
       .send({
         type: 'video',
@@ -433,16 +438,16 @@ describe('Questions API (e2e)', () => {
   });
 
   it('POST /questions/answers/:answerId/like toggles and comments support replies', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'question with answer interactions',
       body: 'body',
       subject: 'MATH',
       grade: '2',
     });
 
-    const createAnswerRes = await request(app.getHttpServer())
+    const createAnswerRes = await member
       .post(`/questions/${created.body.id}/answers`)
-      .set('x-user-id', 'answer-author')
+      .set('Cookie', await sessionCookie(app, 'answer-author'))
       .send({
         type: 'text',
         content: 'answer content',
@@ -450,12 +455,12 @@ describe('Questions API (e2e)', () => {
 
     const answerId = createAnswerRes.body.id as string;
 
-    const likeFirst = await request(app.getHttpServer())
+    const likeFirst = await member
       .post(`/questions/answers/${answerId}/like`)
-      .set('x-user-id', 'u-1');
-    const likeSecond = await request(app.getHttpServer())
+      .set('Cookie', await sessionCookie(app, 'u-1'));
+    const likeSecond = await member
       .post(`/questions/answers/${answerId}/like`)
-      .set('x-user-id', 'u-1');
+      .set('Cookie', await sessionCookie(app, 'u-1'));
 
     expect(likeFirst.status).toBe(201);
     expect(likeFirst.body.likeCount).toBe(1);
@@ -463,17 +468,17 @@ describe('Questions API (e2e)', () => {
     expect(likeSecond.body.likeCount).toBe(0);
     expect(likeSecond.body.liked).toBe(false);
 
-    const rootComment = await request(app.getHttpServer())
+    const rootComment = await member
       .post(`/questions/answers/${answerId}/comments`)
-      .set('x-user-id', 'u-2')
+      .set('Cookie', await sessionCookie(app, 'u-2'))
       .send({
         content: 'root comment',
         attachments: ['data:image/png;base64,AAAA'],
       });
 
-    const replyComment = await request(app.getHttpServer())
+    const replyComment = await member
       .post(`/questions/answers/${answerId}/comments`)
-      .set('x-user-id', 'u-3')
+      .set('Cookie', await sessionCookie(app, 'u-3'))
       .send({
         content: 'reply comment',
         parentCommentId: rootComment.body.id,
@@ -483,7 +488,7 @@ describe('Questions API (e2e)', () => {
     expect(rootComment.status).toBe(201);
     expect(replyComment.status).toBe(201);
 
-    const listAnswersRes = await request(app.getHttpServer()).get(
+    const listAnswersRes = await member.get(
       `/questions/${created.body.id}/answers`,
     );
 
@@ -505,20 +510,20 @@ describe('Questions API (e2e)', () => {
     });
     const authorSession = await authService.createSession(author.user.id);
 
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'to solve',
       body: 'body',
       subject: 'MATH',
       grade: '2',
-    }).set('x-user-id', author.user.id);
+    }).set('Cookie', await sessionCookie(app, author.user.id));
 
-    const first = await request(app.getHttpServer()).patch(
+    const first = await member.patch(
       `/questions/${created.body.id}/solve`,
     ).set('Cookie', [`keepit-session=${authorSession}`]);
     expect(first.status).toBe(200);
     expect(first.body.status).toBe('solved');
 
-    const second = await request(app.getHttpServer()).patch(
+    const second = await member.patch(
       `/questions/${created.body.id}/solve`,
     ).set('Cookie', [`keepit-session=${authorSession}`]);
     expect(second.status).toBe(200);
@@ -538,14 +543,14 @@ describe('Questions API (e2e)', () => {
     });
     const otherSession = await authService.createSession(other.user.id);
 
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'owner only solve target',
       body: 'body',
       subject: 'MATH',
       grade: '2',
-    }).set('x-user-id', author.user.id);
+    }).set('Cookie', await sessionCookie(app, author.user.id));
 
-    const res = await request(app.getHttpServer())
+    const res = await member
       .patch(`/questions/${created.body.id}/solve`)
       .set('Cookie', [`keepit-session=${otherSession}`]);
 
@@ -553,21 +558,21 @@ describe('Questions API (e2e)', () => {
   });
 
   it('PATCH /questions/:id/solve -> 404 for unknown id', async () => {
-    const res = await request(app.getHttpServer()).patch('/questions/not-found/solve');
+    const res = await member.patch('/questions/not-found/solve');
     expect(res.status).toBe(404);
   });
 
   it('GET /questions includes solved status in list', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'list solved target',
       body: 'body',
       subject: 'MATH',
       grade: '3',
     });
 
-    await request(app.getHttpServer()).patch(`/questions/${created.body.id}/solve`);
+    await member.patch(`/questions/${created.body.id}/solve`);
 
-    const listRes = await request(app.getHttpServer()).get('/questions');
+    const listRes = await member.get('/questions');
     expect(listRes.status).toBe(200);
     expect(Array.isArray(listRes.body)).toBe(true);
 
@@ -577,21 +582,21 @@ describe('Questions API (e2e)', () => {
   });
 
   it('GET /questions filters by subject and grade', async () => {
-    await request(app.getHttpServer()).post('/questions').send({
+    await member.post('/questions').send({
       title: 'filter math',
       body: 'body',
       subject: 'MATH',
       grade: '2',
     });
 
-    await request(app.getHttpServer()).post('/questions').send({
+    await member.post('/questions').send({
       title: 'filter english',
       body: 'body',
       subject: 'ENGLISH',
       grade: '2',
     });
 
-    const res = await request(app.getHttpServer()).get('/questions?subject=MATH&grade=2');
+    const res = await member.get('/questions?subject=MATH&grade=2');
 
     expect(res.status).toBe(200);
     expect(res.body.length).toBeGreaterThan(0);
@@ -604,14 +609,14 @@ describe('Questions API (e2e)', () => {
   });
 
   it('GET /videos returns an array and supports empty state', async () => {
-    const res = await request(app.getHttpServer()).get('/videos');
+    const res = await member.get('/videos');
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
 
   it('POST /questions/:id/like toggles per account', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'like once e2e',
       body: 'body',
       subject: 'MATH',
@@ -631,16 +636,16 @@ describe('Questions API (e2e)', () => {
     const user1Session = await authService.createSession(user1.user.id);
     const user2Session = await authService.createSession(user2.user.id);
 
-    const first = await request(app.getHttpServer())
+    const first = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${user1Session}`]);
-    const second = await request(app.getHttpServer())
+    const second = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${user1Session}`]);
-    const third = await request(app.getHttpServer())
+    const third = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${user2Session}`]);
-    const fourth = await request(app.getHttpServer())
+    const fourth = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${user1Session}`]);
 
@@ -657,7 +662,7 @@ describe('Questions API (e2e)', () => {
 
   it('keeps like toggle contract and likeCount consistency across list/detail while preserving 401 for unauthenticated users', async () => {
     const uniqueTitle = `like-contract-${Date.now()}`;
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: uniqueTitle,
       body: 'body',
       subject: 'MATH',
@@ -678,24 +683,24 @@ describe('Questions API (e2e)', () => {
       .set('x-user-id', identity.user.id);
     expect(unauthorized.status).toBe(401);
 
-    const first = await request(app.getHttpServer())
+    const first = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${sessionId}`]);
     expect(first.status).toBe(201);
     expect(first.body.liked).toBe(true);
     expect(first.body.likeCount).toBe(1);
 
-    const listAfterFirst = await request(app.getHttpServer()).get(
+    const listAfterFirst = await member.get(
       `/questions/all?title=${encodeURIComponent(uniqueTitle)}`,
     );
-    const detailAfterFirst = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detailAfterFirst = await member.get(`/questions/${created.body.id}`);
     expect(listAfterFirst.status).toBe(200);
     expect(detailAfterFirst.status).toBe(200);
     expect(listAfterFirst.body).toHaveLength(1);
     expect(listAfterFirst.body[0].likeCount).toBe(1);
     expect(detailAfterFirst.body.likeCount).toBe(1);
 
-    const second = await request(app.getHttpServer())
+    const second = await member
       .post(`/questions/${created.body.id}/like`)
       .set('Cookie', [`keepit-session=${sessionId}`]);
     expect(second.status).toBe(201);
@@ -703,10 +708,10 @@ describe('Questions API (e2e)', () => {
     expect(second.body.likeCount).toBe(0);
     expect(second.body.likeCount).toBeGreaterThanOrEqual(0);
 
-    const listAfterSecond = await request(app.getHttpServer()).get(
+    const listAfterSecond = await member.get(
       `/questions/all?title=${encodeURIComponent(uniqueTitle)}`,
     );
-    const detailAfterSecond = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detailAfterSecond = await member.get(`/questions/${created.body.id}`);
     expect(listAfterSecond.status).toBe(200);
     expect(detailAfterSecond.status).toBe(200);
     expect(listAfterSecond.body).toHaveLength(1);
@@ -716,7 +721,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('POST /questions/:id/like -> 401 when user header is missing', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'like auth required',
       body: 'body',
       subject: 'MATH',
@@ -728,13 +733,13 @@ describe('Questions API (e2e)', () => {
   });
 
   it('GET /questions returns top ordered by likeCount desc', async () => {
-    const low = await request(app.getHttpServer()).post('/questions').send({
+    const low = await member.post('/questions').send({
       title: 'top-low',
       body: 'body',
       subject: 'MATH',
       grade: '1',
     });
-    const high = await request(app.getHttpServer()).post('/questions').send({
+    const high = await member.post('/questions').send({
       title: 'top-high',
       body: 'body',
       subject: 'MATH',
@@ -754,18 +759,18 @@ describe('Questions API (e2e)', () => {
     const topUser1Session = await authService.createSession(topUser1.user.id);
     const topUser2Session = await authService.createSession(topUser2.user.id);
 
-    await request(app.getHttpServer())
+    await member
       .post(`/questions/${low.body.id}/like`)
       .set('Cookie', [`keepit-session=${topUser1Session}`]);
 
-    await request(app.getHttpServer())
+    await member
       .post(`/questions/${high.body.id}/like`)
       .set('Cookie', [`keepit-session=${topUser1Session}`]);
-    await request(app.getHttpServer())
+    await member
       .post(`/questions/${high.body.id}/like`)
       .set('Cookie', [`keepit-session=${topUser2Session}`]);
 
-    const res = await request(app.getHttpServer()).get('/questions');
+    const res = await member.get('/questions');
     expect(res.status).toBe(200);
 
     const highIndex = res.body.findIndex((item: { id: string }) => item.id === high.body.id);
@@ -776,7 +781,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('hides reported question only for reporter', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'report-hide-target',
       body: 'body',
       subject: 'MATH',
@@ -797,7 +802,7 @@ describe('Questions API (e2e)', () => {
     const reporterSession = await authService.createSession(reporter.user.id);
     const anotherSession = await authService.createSession(another.user.id);
 
-    const reportRes = await request(app.getHttpServer())
+    const reportRes = await member
       .post('/reports')
       .set('Cookie', [`keepit-session=${reporterSession}`])
       .send({
@@ -810,10 +815,10 @@ describe('Questions API (e2e)', () => {
 
     expect(reportRes.status).toBe(201);
 
-    const reporterList = await request(app.getHttpServer())
+    const reporterList = await member
       .get('/questions')
       .set('Cookie', [`keepit-session=${reporterSession}`]);
-    const anotherList = await request(app.getHttpServer())
+    const anotherList = await member
       .get('/questions')
       .set('Cookie', [`keepit-session=${anotherSession}`]);
 
@@ -824,7 +829,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('applies report-hide contract across /questions, /questions/all, /questions/:id with admin and anonymous exceptions', async () => {
-    const created = await request(app.getHttpServer()).post('/questions').send({
+    const created = await member.post('/questions').send({
       title: 'report-hide-contract-target',
       body: 'body',
       subject: 'MATH',
@@ -833,9 +838,9 @@ describe('Questions API (e2e)', () => {
     expect(created.status).toBe(201);
 
     const reporterHeaderId = `reporter-header-${Date.now()}`;
-    const reportRes = await request(app.getHttpServer())
+    const reportRes = await member
       .post('/reports')
-      .set('x-user-id', reporterHeaderId)
+      .set('Cookie', await sessionCookie(app, reporterHeaderId))
       .send({
         targetType: 'question',
         targetId: created.body.id,
@@ -845,15 +850,15 @@ describe('Questions API (e2e)', () => {
       });
     expect(reportRes.status).toBe(201);
 
-    const reporterTop = await request(app.getHttpServer())
+    const reporterTop = await member
       .get('/questions')
-      .set('x-user-id', reporterHeaderId);
-    const reporterAll = await request(app.getHttpServer())
+      .set('Cookie', await sessionCookie(app, reporterHeaderId));
+    const reporterAll = await member
       .get('/questions/all')
-      .set('x-user-id', reporterHeaderId);
-    const reporterDetail = await request(app.getHttpServer())
+      .set('Cookie', await sessionCookie(app, reporterHeaderId));
+    const reporterDetail = await member
       .get(`/questions/${created.body.id}`)
-      .set('x-user-id', reporterHeaderId);
+      .set('Cookie', await sessionCookie(app, reporterHeaderId));
 
     expect(reporterTop.status).toBe(200);
     expect(reporterAll.status).toBe(200);
@@ -869,7 +874,7 @@ describe('Questions API (e2e)', () => {
     });
     const adminSession = await authService.createSession(adminIdentity.user.id);
 
-    const adminReportRes = await request(app.getHttpServer())
+    const adminReportRes = await member
       .post('/reports')
       .set('Cookie', [`keepit-session=${adminSession}`])
       .send({
@@ -881,13 +886,13 @@ describe('Questions API (e2e)', () => {
       });
     expect(adminReportRes.status).toBe(201);
 
-    const adminTop = await request(app.getHttpServer())
+    const adminTop = await member
       .get('/questions')
       .set('Cookie', [`keepit-session=${adminSession}`]);
-    const adminAll = await request(app.getHttpServer())
+    const adminAll = await member
       .get('/questions/all')
       .set('Cookie', [`keepit-session=${adminSession}`]);
-    const adminDetail = await request(app.getHttpServer())
+    const adminDetail = await member
       .get(`/questions/${created.body.id}`)
       .set('Cookie', [`keepit-session=${adminSession}`]);
 
@@ -898,9 +903,9 @@ describe('Questions API (e2e)', () => {
     expect(adminAll.body.some((item: { id: string }) => item.id === created.body.id)).toBe(true);
     expect(adminDetail.body.id).toBe(created.body.id);
 
-    const anonymousTop = await request(app.getHttpServer()).get('/questions');
-    const anonymousAll = await request(app.getHttpServer()).get('/questions/all');
-    const anonymousDetail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const anonymousTop = await member.get('/questions');
+    const anonymousAll = await member.get('/questions/all');
+    const anonymousDetail = await member.get(`/questions/${created.body.id}`);
 
     expect(anonymousTop.status).toBe(200);
     expect(anonymousAll.status).toBe(200);
@@ -915,7 +920,7 @@ describe('Questions API (e2e)', () => {
     const createdQuestions: Array<{ id: string; title: string }> = [];
 
     for (let i = 0; i < likeCounts.length; i += 1) {
-      const created = await request(app.getHttpServer()).post('/questions').send({
+      const created = await member.post('/questions').send({
         title: `e2e-policy-${i}`,
         body: 'body',
         subject: 'MATH',
@@ -932,13 +937,13 @@ describe('Questions API (e2e)', () => {
         });
         const sessionId = await authService.createSession(user.user.id);
 
-        await request(app.getHttpServer())
+        await member
           .post(`/questions/${created.body.id}/like`)
           .set('Cookie', [`keepit-session=${sessionId}`]);
       }
     }
 
-    const res = await request(app.getHttpServer()).get('/questions');
+    const res = await member.get('/questions');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(10);
 
@@ -961,7 +966,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('GET /questions/:id 응답에 authorName 필드 존재하고 non-null', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       title: 'authorName 기본 검증',
       body: '내용',
       subject: 'MATH',
@@ -969,14 +974,14 @@ describe('Questions API (e2e)', () => {
     });
     expect(res.status).toBe(201);
 
-    const detail = await request(app.getHttpServer()).get(`/questions/${res.body.id}`);
+    const detail = await member.get(`/questions/${res.body.id}`);
     expect(detail.status).toBe(200);
     expect(detail.body.authorName).toBeDefined();
     expect(detail.body.authorName).not.toBeNull();
   });
 
   it('visibility: anonymous → authorName 익명, authorPhotoUrl undefined', async () => {
-    const res = await request(app.getHttpServer()).post('/questions').send({
+    const res = await member.post('/questions').send({
       title: 'anonymous author test',
       body: '내용',
       subject: 'MATH',
@@ -985,7 +990,7 @@ describe('Questions API (e2e)', () => {
     });
     expect(res.status).toBe(201);
 
-    const detail = await request(app.getHttpServer()).get(`/questions/${res.body.id}`);
+    const detail = await member.get(`/questions/${res.body.id}`);
     expect(detail.status).toBe(200);
     expect(detail.body.authorName).toBe('익명');
     expect(detail.body.authorPhotoUrl).toBeUndefined();
@@ -999,10 +1004,10 @@ describe('Questions API (e2e)', () => {
     });
     const sessionId = await authService.createSession(user.id);
 
-    const created = await request(app.getHttpServer())
+    const created = await member
       .post('/questions')
       .set('Cookie', [`keepit-session=${sessionId}`])
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({
         title: 'nickname visibility question',
         body: '내용',
@@ -1012,13 +1017,13 @@ describe('Questions API (e2e)', () => {
       });
     expect(created.status).toBe(201);
 
-    const detail = await request(app.getHttpServer()).get(`/questions/${created.body.id}`);
+    const detail = await member.get(`/questions/${created.body.id}`);
     expect(detail.status).toBe(200);
     expect(detail.body.authorName).toBe('질문작성자닉네임');
   });
 
   it('답변(answer)에 authorName, authorAvatar 필드 존재', async () => {
-    const question = await request(app.getHttpServer()).post('/questions').send({
+    const question = await member.post('/questions').send({
       title: 'answer author fields test',
       body: '내용',
       subject: 'MATH',
@@ -1033,13 +1038,13 @@ describe('Questions API (e2e)', () => {
     });
     const sessionId = await authService.createSession(user.id);
 
-    await request(app.getHttpServer())
+    await member
       .post(`/questions/${question.body.id}/answers`)
       .set('Cookie', [`keepit-session=${sessionId}`])
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({ type: 'text', content: '답변 내용' });
 
-    const answers = await request(app.getHttpServer()).get(`/questions/${question.body.id}/answers`);
+    const answers = await member.get(`/questions/${question.body.id}/answers`);
     expect(answers.status).toBe(200);
     expect(answers.body.length).toBeGreaterThan(0);
     const answer = answers.body[0];
@@ -1048,7 +1053,7 @@ describe('Questions API (e2e)', () => {
   });
 
   it('답변 댓글에 authorAvatar 필드 존재', async () => {
-    const question = await request(app.getHttpServer()).post('/questions').send({
+    const question = await member.post('/questions').send({
       title: 'answer comment author test',
       body: '내용',
       subject: 'MATH',
@@ -1062,25 +1067,25 @@ describe('Questions API (e2e)', () => {
     });
     const sessionId = await authService.createSession(user.id);
 
-    const answer = await request(app.getHttpServer())
+    const answer = await member
       .post(`/questions/${question.body.id}/answers`)
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({ type: 'text', content: '답변' });
 
-    await request(app.getHttpServer())
+    await member
       .post(`/questions/answers/${answer.body.id}/comments`)
       .set('Cookie', [`keepit-session=${sessionId}`])
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({ content: '답변 댓글', authorVisibility: 'public' });
 
-    const comments = await request(app.getHttpServer()).get(`/questions/answers/${answer.body.id}/comments`);
+    const comments = await member.get(`/questions/answers/${answer.body.id}/comments`);
     expect(comments.status).toBe(200);
     expect(comments.body.length).toBeGreaterThan(0);
     expect(comments.body[0].authorAvatar).toBeDefined();
   });
 
   it('답변 댓글 authorVisibility=anonymous → authorName=익명', async () => {
-    const question = await request(app.getHttpServer()).post('/questions').send({
+    const question = await member.post('/questions').send({
       title: 'anon comment author test',
       body: '내용',
       subject: 'MATH',
@@ -1095,16 +1100,16 @@ describe('Questions API (e2e)', () => {
     });
     const sessionId = await authService.createSession(user.id);
 
-    const answer = await request(app.getHttpServer())
+    const answer = await member
       .post(`/questions/${question.body.id}/answers`)
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({ type: 'text', content: '답변' });
     expect(answer.status).toBe(201);
 
-    const comment = await request(app.getHttpServer())
+    const comment = await member
       .post(`/questions/answers/${answer.body.id}/comments`)
       .set('Cookie', [`keepit-session=${sessionId}`])
-      .set('x-user-id', user.id)
+      .set('Cookie', await sessionCookie(app, user.id))
       .send({ content: '익명 답변 댓글', authorVisibility: 'anonymous' });
     expect(comment.status).toBe(201);
     expect(comment.body.authorName).toBe('익명');

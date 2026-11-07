@@ -1,4 +1,5 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { TableClient } from '@azure/data-tables';
 import { randomUUID } from 'crypto';
 import { ensureTable, escapeOdataString, getTableClient, listAllEntities } from '../db/azure-table.util';
@@ -28,6 +29,7 @@ export class ReportsService {
     private readonly reportRepository: ReportRepository,
     @Inject(ADMIN_AUDIT_LOG_REPOSITORY)
     private readonly adminAuditLogRepository: AdminAuditLogRepository,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {
     this.hasTableConnection = Boolean(process.env.AZURE_TABLES_CONNECTION_STRING);
   }
@@ -190,10 +192,10 @@ export class ReportsService {
   async deleteTargetAndResolve(id: string, reason: string, adminId = 'admin-user') {
     const report = await this.reportRepository.findById(id);
     if (!report) {
-      throw new Error('report not found');
+      throw new NotFoundException('report not found');
     }
 
-    await this.deleteTargetByReport(report);
+    await this.deleteTargetByReport(report, adminId);
 
     const updated = report.resolve();
     await this.reportRepository.save(updated);
@@ -231,7 +233,7 @@ export class ReportsService {
   ) {
     const report = await this.reportRepository.findById(id);
     if (!report) {
-      throw new Error('report not found');
+      throw new NotFoundException('report not found');
     }
 
     const updated = mutate(report);
@@ -252,8 +254,30 @@ export class ReportsService {
     return updated;
   }
 
-  private async deleteTargetByReport(report: ReportEntity): Promise<void> {
+  private async deleteTargetByReport(report: ReportEntity, adminId: string): Promise<void> {
     if (!this.hasTableConnection) {
+      const [{ QuestionsService }, { AnswersService }, { VideosService }, { CommunityService }] = await Promise.all([
+        import('../questions/questions.service'),
+        import('../questions/answers.service'),
+        import('../videos/videos.service'),
+        import('../community/community.service'),
+      ]);
+      if (!this.moduleRef) throw new Error('moderation services unavailable');
+      const options = { strict: false };
+      if (report.targetType === 'question') {
+        await this.moduleRef.get(QuestionsService, options).deleteById(report.targetId, adminId);
+      } else if (report.targetType === 'answer') {
+        await this.moduleRef.get(AnswersService, options).deleteById(report.targetId, adminId);
+      } else if (report.targetType === 'video') {
+        await this.moduleRef.get(VideosService, options).deleteById(report.targetId, adminId);
+      } else if (report.targetType === 'community-post') {
+        await this.moduleRef.get(CommunityService, options).deletePost(report.targetId, adminId);
+      } else {
+        const deleted = await this.moduleRef.get(CommunityService, options).deleteCommentForModeration(report.targetId)
+          || await this.moduleRef.get(AnswersService, options).deleteCommentForModeration(report.targetId)
+          || await this.moduleRef.get(VideosService, options).deleteCommentForModeration(report.targetId);
+        if (!deleted) throw new NotFoundException('comment not found');
+      }
       return;
     }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createCommunityPost,
   getCommunityBoard,
@@ -11,6 +11,7 @@ import type { CommunityBoardResponse } from '../lib/types';
 import { CommunityProfileModal } from './community-profile-modal';
 import { AnonymousProfileBadge } from './anonymous-profile-badge';
 import { DirectChatModal } from './direct-chat-modal';
+import { ContentMetric } from './content-metric';
 
 interface CommunityBoardProps {
   initialBoard: CommunityBoardResponse;
@@ -23,6 +24,9 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [boardError, setBoardError] = useState('');
+  const boardRequestId = useRef(0);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerState, setComposerState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [composerMessage, setComposerMessage] = useState('');
@@ -32,10 +36,21 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const currentUserId = authUser?.id ?? 'guest-user';
 
-  const refreshBoard = async (p = page, q = query) => {
-    const updated = await getCommunityBoard(currentUserId, p, q);
-    setBoard(updated);
-  };
+  const refreshBoard = useCallback(async (p: number, q: string) => {
+    const requestId = ++boardRequestId.current;
+    setBoardLoading(true);
+    setBoardError('');
+    try {
+      const updated = await getCommunityBoard(currentUserId, p, q);
+      if (requestId === boardRequestId.current) setBoard(updated);
+    } catch (error) {
+      if (requestId === boardRequestId.current) {
+        setBoardError(error instanceof Error ? error.message : '게시글 목록을 불러오지 못했습니다.');
+      }
+    } finally {
+      if (requestId === boardRequestId.current) setBoardLoading(false);
+    }
+  }, [currentUserId]);
 
   const openPost = (postId: string) => {
     const url = `/community/posts/${postId}`;
@@ -58,7 +73,10 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
   useEffect(() => {
     if (!authResolved) return;
     void refreshBoard(page, query);
-  }, [authResolved, currentUserId, page, query]);
+    return () => {
+      boardRequestId.current += 1;
+    };
+  }, [authResolved, page, query, refreshBoard]);
 
   return (
     <div className="community-layout">
@@ -91,10 +109,20 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
           </button>
         </form>
 
+        {boardLoading && <p role="status">게시글을 불러오는 중입니다.</p>}
+        {boardError && (
+          <div role="alert">
+            <p>게시글 목록을 불러오지 못했습니다. {boardError}</p>
+            <button type="button" className="secondary-button" onClick={() => void refreshBoard(page, query)}>
+              다시 시도
+            </button>
+          </div>
+        )}
+
         {/* 게시글 목록 */}
         <div className="stack-list">
           {board.posts.length === 0 ? (
-            <div className="empty-state">게시글이 없습니다. 첫 번째 게시글을 작성해 보세요!</div>
+            !boardLoading && !boardError && <div className="empty-state">게시글이 없습니다. 첫 번째 게시글을 작성해 보세요!</div>
           ) : (
             board.posts.map((post) => (
               <article
@@ -115,8 +143,10 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                       photoUrl={post.authorPhotoUrl}
                     />
                   )}
-                  <span style={{ fontSize: '0.78rem', color: '#888', whiteSpace: 'nowrap', marginTop: '0.25rem' }}>
-                    조회 {post.viewCount} · 좋아요 {post.likeCount} · {new Date(post.createdAt).toLocaleDateString('ko-KR')}
+                  <span className="content-metrics" style={{ fontSize: '0.78rem', color: '#888', marginTop: '0.25rem' }}>
+                    <ContentMetric kind="view" count={post.viewCount} />
+                    <ContentMetric kind="like" count={post.likeCount} />
+                    <span>{new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
                   </span>
                 </div>
                 <strong style={{ fontSize: '0.95rem' }}>{post.title}</strong>
@@ -225,6 +255,7 @@ export function CommunityBoard({ initialBoard }: CommunityBoardProps) {
                   await refreshBoard(1, '');
                   setPage(1);
                   setQuery('');
+                  setSearchInput('');
                   setComposerOpen(false);
                   setComposerState('idle');
                   setComposerMessage('');

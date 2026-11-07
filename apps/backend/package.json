@@ -17,6 +17,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "multer": "$multer"
+  },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",
     "@azure/identity": "^4.14.1",

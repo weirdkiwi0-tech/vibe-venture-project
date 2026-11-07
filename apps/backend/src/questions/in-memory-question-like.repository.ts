@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { attachLocalState } from '../db/local-state';
 import { QuestionLikeRepository } from './question-like.repository';
 
 @Injectable()
 export class InMemoryQuestionLikeRepository implements QuestionLikeRepository {
   private readonly likesByQuestionId = new Map<string, Set<string>>();
+
+  constructor() {
+    attachLocalState(this, 'question-likes', ['likesByQuestionId'], ['saveLike', 'removeLike']);
+  }
 
   async hasUserLiked(questionId: string, userId: string): Promise<boolean> {
     const likedUsers = this.likesByQuestionId.get(questionId);

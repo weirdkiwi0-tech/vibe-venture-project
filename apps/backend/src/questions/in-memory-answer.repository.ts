@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { attachLocalState } from '../db/local-state';
 import { AnswerEntity } from './entities/answer.entity';
 import { AnswerRepository } from './answers.repository';
 
 @Injectable()
 export class InMemoryAnswerRepository implements AnswerRepository {
   private readonly store = new Map<string, AnswerEntity>();
+
+  constructor() {
+    attachLocalState(this, 'answers', ['store'], ['save', 'deleteById', 'deleteByQuestionId'], { store: AnswerEntity.prototype });
+  }
 
   async save(answer: AnswerEntity): Promise<void> {
     this.store.set(answer.id, answer);

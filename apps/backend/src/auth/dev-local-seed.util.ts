@@ -77,14 +77,20 @@ export async function ensureDevLocalAccount(
 }
 
 export async function seedDevAdminOperatorAccounts(
-  authService: DevLocalSeedAuthService,
+  authService: DevLocalSeedAuthService & { updateUserRole(userId: string, role: 'admin'): Promise<unknown> },
   envOrInput: SeedAccountsInput | SeedEnv = process.env,
 ): Promise<void> {
+  const ensureAdministrator = async (account: SeedAccountInput): Promise<void> => {
+    await ensureDevLocalAccount(authService, account);
+    const user = (await authService.listUsers()).find((candidate) => normalizeEmail(candidate.email) === normalizeEmail(account.email));
+    if (!user) throw new Error('Seed administrator account was not created');
+    await authService.updateUserRole(user.id, 'admin');
+  };
   if (isSeedAccountsInput(envOrInput)) {
-    await ensureDevLocalAccount(authService, envOrInput.admin);
-    await ensureDevLocalAccount(authService, envOrInput.operator);
+    await ensureAdministrator(envOrInput.admin);
+    await ensureAdministrator(envOrInput.operator);
     if (envOrInput.developer) {
-      await ensureDevLocalAccount(authService, envOrInput.developer);
+      await ensureAdministrator(envOrInput.developer);
     }
     return;
   }
@@ -96,15 +102,15 @@ export async function seedDevAdminOperatorAccounts(
     displayName: env.DEV_ADMIN_DISPLAY_NAME ?? '운영자',
   };
 
-  await ensureDevLocalAccount(authService, admin);
+  await ensureAdministrator(admin);
 
-  await ensureDevLocalAccount(authService, {
+  await ensureAdministrator({
     email: env.DEV_OPERATOR_EMAIL ?? 'operator@keepit.dev',
     password: env.DEV_OPERATOR_PASSWORD ?? 'Operator#2026',
     displayName: env.DEV_OPERATOR_DISPLAY_NAME?.trim() || '운영자2',
   });
 
-  await ensureDevLocalAccount(authService, {
+  await ensureAdministrator({
     email: env.DEV_DEVELOPER_EMAIL ?? 'developer@keepit.dev',
     password: env.DEV_DEVELOPER_PASSWORD ?? 'Dev!2026',
     displayName: env.DEV_DEVELOPER_DISPLAY_NAME?.trim() || '개발자',

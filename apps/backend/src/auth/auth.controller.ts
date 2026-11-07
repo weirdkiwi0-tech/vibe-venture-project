@@ -203,6 +203,9 @@ export class AuthController {
 
   @Post('signup')
   async signup(@Body() body: LocalSignUpDto, @Req() req: Request, @Res() res: Response) {
+    if (this.authService.isReservedAdministratorEmail(body.email)) {
+      return res.status(403).json({ success: false, message: '이 이메일은 관리자 인증 전용입니다.' });
+    }
     try {
       const { user } = await this.authService.signUpLocal({
         email: body.email,
